@@ -53,7 +53,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 </head>
 <body>
 <div id="header">
-  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v19</span></h1>
+  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v24</span></h1>
   <div class="stat w56"><span class="stat-label">curl</span><span class="stat-value" id="st-curl">0°</span></div>
   <div class="stat w80"><span class="stat-label">tip ht</span><span class="stat-value" id="st-tip">— mm</span></div>
   <div class="stat w96"><span class="stat-label">reach</span><span class="stat-value" id="st-reach">— mm</span></div>
@@ -71,11 +71,19 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
     <div class="lf-item"><span class="lf-label">L3 240°</span><span class="lf-val" id="lf-3">—</span><span class="lf-arrow lf-hold" id="la-3">■</span></div>
   </div>
   <div class="hdivider"></div>
+  <div class="lf-group">
+    <div class="lf-item" style="width:72px"><span class="lf-label">fric mgn</span><span class="lf-val" id="st-fric" style="font-size:11px">—×</span><span class="lf-label" style="font-size:8px;color:#556677">@ μ slider</span></div>
+  </div>
+  <div class="hdivider"></div>
   <span class="lf-head">pk N<br>↑max</span>
   <div class="lf-group" id="pk-group">
     <div class="lf-item"><span class="lf-label">PK1</span><span class="lf-pk" id="pk-1">—</span></div>
     <div class="lf-item"><span class="lf-label">PK2</span><span class="lf-pk" id="pk-2">—</span></div>
     <div class="lf-item"><span class="lf-label">PK3</span><span class="lf-pk" id="pk-3">—</span></div>
+  </div>
+  <div class="hdivider"></div>
+  <div class="lf-group">
+    <div class="lf-item" style="width:72px"><span class="lf-label">fric min</span><span class="lf-pk" id="pk-fric">—×</span><span class="lf-label" style="font-size:8px;color:#556677">↓floor</span></div>
   </div>
 </div>
 <div id="main">
@@ -84,10 +92,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 
     <div class="section">
       <div class="section-title">motion program</div>
-      <div style="font-size:9px;color:#556677;margin-bottom:5px;line-height:1.4">
-        <span class="fdot fdot-hw" style="display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:3px;vertical-align:middle"></span>hardware-faithful &nbsp;
-        <span class="fdot fdot-kr" style="display:inline-block;width:5px;height:5px;border-radius:50%;margin-right:3px;vertical-align:middle"></span>pose-only (not 3-cable commandable)
-      </div>
+
       <div class="btn-grid" id="prog-btns">
         <button class="btn active" data-prog="planar_curl"><span class="fdot fdot-hw"></span>planar curl</button>
         <button class="btn" data-prog="lateral_sweep"><span class="fdot fdot-hw"></span>lateral sweep</button>
@@ -95,11 +100,9 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
         <button class="btn" data-prog="sweep"><span class="fdot fdot-hw"></span>sweep</button>
         <button class="btn" data-prog="probe"><span class="fdot fdot-hw"></span>probe</button>
         <button class="btn" data-prog="loss_of_power"><span class="fdot fdot-hw"></span>loss of power</button>
-        <button class="btn" data-prog="spiral_reach"><span class="fdot fdot-kr"></span>spiral reach</button>
-        <button class="btn" data-prog="full_range"><span class="fdot fdot-kr"></span>full range</button>
-        <button class="btn" data-prog="organic_wave"><span class="fdot fdot-kr"></span>organic wave</button>
-        <button class="btn" data-prog="noodling"><span class="fdot fdot-kr"></span>noodling 🐙</button>
-        <button class="btn" data-prog="pole_grasp"><span class="fdot fdot-kr"></span>pole grasp 🎯</button>
+        <button class="btn" data-prog="full_range"><span class="fdot fdot-hw"></span>full range</button>
+        <button class="btn" data-prog="noodling"><span class="fdot fdot-hw"></span>noodling 🐙</button>
+        <button class="btn" data-prog="pole_grasp"><span class="fdot fdot-hw"></span>pole grasp 🎯</button>
       </div>
       <div class="divider"></div>
       <div class="row">
@@ -146,6 +149,15 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
       <div class="row"><label>arm length</label>
         <input type="range" id="wi-arm" min="1000" max="5000" value="3000" step="100">
         <span class="val" id="wi-arm-val">3000 mm</span></div>
+      <div class="row"><label>Zone A length</label>
+        <input type="range" id="wi-la" min="200" max="3000" value="1170" step="50">
+        <span class="val" id="wi-la-val">1170 mm</span></div>
+      <div class="row"><label>Zone B length</label>
+        <input type="range" id="wi-lb" min="200" max="3000" value="1357" step="50">
+        <span class="val" id="wi-lb-val">1357 mm</span></div>
+      <div class="row"><label>Zone C length</label>
+        <input type="range" id="wi-lc" min="100" max="1500" value="473" step="25">
+        <span class="val" id="wi-lc-val">473 mm</span></div>
       <div class="row"><label>Zone A segs</label>
         <input type="range" id="wi-na" min="3" max="10" value="6" step="1">
         <span class="val" id="wi-na-val">6</span></div>
@@ -208,11 +220,10 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
     </div>
 
     <div class="section">
-      <div class="section-title">palette</div>
+      <div class="section-title">Color theme</div>
       <div class="btn-grid" id="palette-btns">
-        <button class="btn active" data-pal="dark">dark</button>
-        <button class="btn" data-pal="midnight">midnight</button>
-        <button class="btn" data-pal="hi-con">hi-contrast</button>
+        <button class="btn" data-pal="dark">dark</button>
+        <button class="btn active" data-pal="hi-con">hi-contrast</button>
         <button class="btn" data-pal="neon">neon</button>
       </div>
     </div>
@@ -229,13 +240,20 @@ const NF_FULL   = ENV.n_frames_full_range;
 const PARAMS_DEFAULT = {
   armLength:ENV.arm_length, nPerZone:ENV.n_per_zone.slice(),
   thetaMax:ENV.theta_max.slice(), taperDeg:ENV.taper_deg.slice(),
+  zoneLengths:[
+    Math.round(ENV.arm_length * 0.390),
+    Math.round(ENV.arm_length * 0.452),
+    Math.round(ENV.arm_length * 0.158),
+  ],
 };
 
 let state = {
   prog:'planar_curl', frame:0, playing:false, looping:true,
   fps:18, speed:1.0, frameAccum:0, loopCount:0,
   peakForces:[0,0,0],   // fractional frame accumulator for slow speeds
+  minFricMargin:Infinity,
   mountAngle:30, mountH:ENV.mount_h, armSep:ENV.arm_sep,
+  zoneLengths:PARAMS_DEFAULT.zoneLengths.slice(),
   armLength:ENV.arm_length, nPerZone:ENV.n_per_zone.slice(),
   thetaMax:ENV.theta_max.slice(), taperDeg:ENV.taper_deg.slice(),
   skinBaseR: ENV.skin_base_r,
@@ -254,7 +272,19 @@ function bFromPhi(d){
   }
   return .5*(lo+hi);
 }
-function boneLengths(npz,tdeg,tmax,L){
+function boneLengths(npz,tdeg,tmax,L,zoneLens){
+  if(zoneLens){
+    // Per-zone scaling: each zone sums to its target length independently.
+    const out=[];
+    for(let zi=0;zi<3;zi++){
+      const b=bFromPhi(tdeg[zi]),beta=Math.exp(-b*tmax[zi]*Math.PI/180);
+      const rel=[];let l=1;
+      for(let j=0;j<npz[zi];j++){rel.push(l);l*=beta;}
+      const sc=zoneLens[zi]/rel.reduce((a,b)=>a+b,0);
+      rel.forEach(r=>out.push(r*sc));
+    }
+    return out;
+  }
   const rel=[];let l=1;
   for(let zi=0;zi<3;zi++){
     const b=bFromPhi(tdeg[zi]),beta=Math.exp(-b*tmax[zi]*Math.PI/180);
@@ -357,7 +387,7 @@ function lopDescendStep(thetas,phis,vth,vph,lengths,boneM,restTh,nPerZone,thetaM
 // so the fall is both smooth and faithful. Returns an array of {thetas,phis}.
 function buildLopTrajectory(nPerZone,thetaMax,nf){
   const nj=nPerZone.reduce((a,b)=>a+b,0)-1;
-  const lengths=boneLengths(nPerZone,state.taperDeg,thetaMax,state.armLength);
+  const lengths=boneLengths(nPerZone,state.taperDeg,thetaMax,state.armLength,state.zoneLengths);
   const boneM=lengths.map((L,i)=>L*ZONE_G_PER_MM_LOP[zoneOf(i,nPerZone)]);
   const offY=state.armSep/2;
   let th=(state.lopStartThetas?state.lopStartThetas.slice():null);
@@ -375,7 +405,7 @@ function buildLopTrajectory(nPerZone,thetaMax,nf){
 
 
 function lopArmPts(mh,offy){
-  const lengths=boneLengths(state.nPerZone,state.taperDeg,state.thetaMax,state.armLength);
+  const lengths=boneLengths(state.nPerZone,state.taperDeg,state.thetaMax,state.armLength,state.zoneLengths);
   const pts=[[0,offy,mh]];let z=mh;
   for(let i=0;i<lengths.length;i++){z-=lengths[i];pts.push([0,offy,z]);}
   return pts;
@@ -386,7 +416,7 @@ function interpPts(A,B,alpha){
 function zoneOf(i,npz){let c=0;for(let zi=0;zi<3;zi++){c+=npz[zi];if(i<c-1)return zi;}return 2;}
 
 function computeWeight(){
-  const lengths=boneLengths(state.nPerZone,state.taperDeg,state.thetaMax,state.armLength);
+  const lengths=boneLengths(state.nPerZone,state.taperDeg,state.thetaMax,state.armLength,state.zoneLengths);
   const gpm=[ENV.zone_g_per_mm.A,ENV.zone_g_per_mm.B,ENV.zone_g_per_mm.C];
   let g=ENV.arm_fixed_weight_g,li=0;
   for(let zi=0;zi<3;zi++)for(let b=0;b<state.nPerZone[zi];b++)g+=lengths[li++]*gpm[zi];
@@ -448,17 +478,26 @@ function updateForces(forces){
     if(d>2){el.textContent='▲';el.className='lf-arrow lf-reel';}
     else if(d<-2){el.textContent='▼';el.className='lf-arrow lf-pay';}
     else{el.textContent='■';el.className='lf-arrow lf-hold';}
-    // Track peaks
+    // Track peaks — always reclassify from stored peak value
     if(forces[i]>state.peakForces[i]){
       state.peakForces[i]=forces[i];
+    }
+    // Redraw pk display from authoritative stored value every frame
+    {
+      const pkVal=state.peakForces[i];
       const pk=document.getElementById('pk-'+(i+1));
-      pk.textContent=Math.round(forces[i])+' N';
-      pk.className=forces[i]>=PEAK_WARN_N?'lf-pk lf-pk-over':'lf-pk';
+      if(pkVal>0){
+        pk.textContent=Math.round(pkVal)+' N';
+        pk.className=pkVal>=PEAK_WARN_N?'lf-pk lf-pk-over':'lf-pk';
+      }
     }
   }
 }
 function resetPeakForces(){
   state.peakForces=[0,0,0];
+  state.minFricMargin=Infinity;
+  const pkFric=document.getElementById('pk-fric');
+  if(pkFric){pkFric.textContent='—×';pkFric.className='lf-pk';}
   for(let i=0;i<3;i++){
     const pk=document.getElementById('pk-'+(i+1));
     pk.textContent='—';pk.className='lf-pk';
@@ -521,18 +560,19 @@ function buildMotionFrames(prog,nPerZone,thetaMax){
           const swing=Math.sin(Math.PI*st);
           th=tmax*0.75*swing; ph=st<0.5?90:270;
         }else if(seg===2){
-          // corkscrew: tip rotates phi full circle, theta builds then falls
-          th=tmax*0.6*Math.sin(Math.PI*st)*(0.4+0.6*zi01);
-          ph=360*st+90*zi01;
+          // HW-faithful: full 360 azimuth sweep, global phi, mid curl
+          th=tmax*0.65*Math.sin(Math.PI*st);
+          ph=360*st;
         }else if(seg===3){
-          // wave: adjacent joints out of phase (sinusoidal phi offset along arm)
+          // HW-faithful: planar wave — theta oscillates along arm, phi global
           const wave=Math.sin(Math.PI*zi01*3 - Math.PI*st*2);
           th=tmax*0.5*(0.5+0.5*wave); ph=200*st;
         }else if(seg===4){
-          // tip steer: base stays straight, tip bends hard through 360
-          const tipFactor=Math.pow(zi01,2);
-          th=tmax*0.9*tipFactor*Math.abs(Math.sin(Math.PI*st));
-          ph=180*st*(1+zi01*0.5);
+          // HW-faithful: 4-direction probe — global phi steps N/E/S/W, theta pulses
+          const dir=Math.floor(st*4)*90;
+          const pulse=Math.sin(Math.PI*(st*4%1));
+          th=tmax*0.75*pulse*(0.3+0.7*zi01);
+          ph=dir;
         }else if(seg===5){
           // full 360° azimuth sweep at steady mid-curl
           const mag=0.8*(1-Math.abs(2*st-1)*0.3);
@@ -566,10 +606,9 @@ function buildMotionFrames(prog,nPerZone,thetaMax){
         const bendAmp = isA ? 0.12 : (0.28 + 0.48*zFrac);
         th = tmax * bendAmp * Math.abs(0.55*wave1 + 0.30*wave2 + 0.15*wave3);
         // Phi: slow planetary drift + distal twist + occasional tip flick direction
-        const phiDrift  = 360 * (t_global * 0.19 + 0.45*Math.sin(2*Math.PI*t_global*0.13));
-        const phiOffset = zi01 * 130 * Math.sin(2*Math.PI*(t_global*0.31 + zi01));
-        const tipSpin   = (zFrac > 0.5) ? 55 * tipFlick : 0;
-        ph = phiDrift + phiOffset + tipSpin;
+        // HW-faithful: single global phi per frame — all joints share same bend direction
+        ph = 360 * (t_global * 0.19 + 0.45*Math.sin(2*Math.PI*t_global*0.13)
+                    + 0.18*Math.sin(2*Math.PI*t_global*0.31));
       }else if(prog==='pole_grasp'){
         th=0;ph=0;  // pole_grasp uses getMotionFrames() path instead
       }
@@ -613,7 +652,7 @@ const WRAP_DEG=150;
 // Run the reach-phase FK (Zone A bent toward az, B+C straight) and return world joint pts.
 function reachPoseWorldPts(az, armOffY){
   const nPerZone=state.nPerZone, thetaMax=state.thetaMax;
-  const lengths=boneLengths(nPerZone,state.taperDeg,thetaMax,state.armLength);
+  const lengths=boneLengths(nPerZone,state.taperDeg,thetaMax,state.armLength,state.zoneLengths);
   const nj=nPerZone.reduce((a,b)=>a+b,0)-1;
   const rThetas=[],rPhis=[];
   for(let ji=0;ji<nj;ji++){
@@ -940,9 +979,6 @@ const PALETTES = {
   'dark':     { bg:'#1a1a2e', grid:'#2a2a4a', zero:'#4a4a6a',
                 zc:['#3a7bd5','#5fa0d0','#e06c5a'], bc:['#e8820c','#f0c040'],
                 skin:'#c8956a', pole:'#88eeaa' },
-  'midnight': { bg:'#0a0a18', grid:'#151530', zero:'#303060',
-                zc:['#5050ff','#8080ff','#ff4488'], bc:['#ff8800','#ffdd00'],
-                skin:'#9966aa', pole:'#44ffcc' },
   'hi-con':   { bg:'#000000', grid:'#222222', zero:'#444444',
                 zc:['#00aaff','#00ffaa','#ff4400'], bc:['#ffaa00','#ffff00'],
                 skin:'#ffffff', pole:'#00ff88' },
@@ -950,7 +986,7 @@ const PALETTES = {
                 zc:['#ff2200','#ffee00','#00ffcc'], bc:['#ff8800','#ffff44'],
                 skin:'#ff55cc', pole:'#33ff99' },
 };
-let activePalette = PALETTES['dark'];
+let activePalette = PALETTES['hi-con'];
 function applyPalette(key){
   activePalette = PALETTES[key] || PALETTES['dark'];
   const b = activePalette.bg;
@@ -1225,7 +1261,7 @@ function getCurrentPose(){
 }
 
 function render(){
-  const lengths=boneLengths(state.nPerZone,state.taperDeg,state.thetaMax,state.armLength);
+  const lengths=boneLengths(state.nPerZone,state.taperDeg,state.thetaMax,state.armLength,state.zoneLengths);
   const nj=state.nPerZone.reduce((a,b)=>a+b,0)-1;
   const frames=getMotionFrames(state.prog,state.nPerZone,state.thetaMax);
   const mf=frames[state.frame]||{thetas:Array(nj).fill(0),phis:Array(nj).fill(0)};
@@ -1301,6 +1337,35 @@ function render(){
   const ttEl=document.getElementById('st-tipten');
   ttEl.textContent=tipPct+'%';
   ttEl.className='stat-value'+(tipPct<20?' stat-warn':tipPct<50?' stat-warn':' stat-ok');
+  // Friction margin: live, uses state.mu (friction slider value)
+  // Motor line force = 22.5 N*m / 0.015 m spool = 1500 N.
+  // capSum = sum(|theta_i|) in radians across all joints at current pose.
+  // tipFrac = exp(-mu * capSum). Margin = 1500 * tipFrac / 30.
+  {
+    const MOTOR_LINE_N = 1500;
+    const TIP_REQ_N = 30;
+    let capSumLive = 0;
+    for(let ji=0; ji<mf.thetas.length; ji++){
+      capSumLive += Math.abs(mf.thetas[ji]) * Math.PI / 180;
+    }
+    const tipFrac = Math.exp(-state.mu * capSumLive);
+    const margin = (MOTOR_LINE_N * tipFrac) / TIP_REQ_N;
+    const fricEl = document.getElementById('st-fric');
+    if(fricEl){
+      fricEl.textContent = margin.toFixed(1)+'×';
+      fricEl.className = 'lf-val' + (margin < 4 ? ' lf-pk-over' : margin < 10 ? ' stat-amber' : '');
+    }
+    // Track minimum margin — always redraw from stored floor every frame
+    if(margin < state.minFricMargin) state.minFricMargin = margin;
+    {
+      const pkFric = document.getElementById('pk-fric');
+      if(pkFric && state.minFricMargin < Infinity){
+        const fm = state.minFricMargin;
+        pkFric.textContent = fm.toFixed(1)+'×';
+        pkFric.className = fm < 4 ? 'lf-pk lf-pk-over' : fm < 10 ? 'lf-pk stat-amber' : 'lf-pk';
+      }
+    }
+  }
   document.getElementById('st-frame').textContent=state.frame+'/'+(nf-1);
   document.getElementById('st-prog').textContent=state.prog.replace(/_/g,' ');
 }
@@ -1359,6 +1424,7 @@ function tick(){
     if(state.looping){
       state.frameAccum=state.frameAccum%nf;
       state.loopCount++;
+      resetPeakForces();
       if(state.prog==='pole_grasp') randomisePole();  // new pole on every loop
     }else{state.frameAccum=nf-1;state.frame=nf-1;state.playing=false;
           playBtn.textContent='▶ play';playBtn.classList.remove('playing');
@@ -1391,7 +1457,36 @@ function wireWI(id,valId,sfx,upd){
     document.getElementById(valId).textContent=Math.round(+this.value)+sfx;upd(+this.value);render();
   });
 }
-wireWI('wi-arm','wi-arm-val',' mm',v=>state.armLength=v);
+wireWI('wi-arm','wi-arm-val',' mm',function(v){
+  // Arm length slider: scale all zone lengths proportionally
+  const oldTotal = state.zoneLengths.reduce((a,b)=>a+b,0);
+  const ratio = v / oldTotal;
+  state.zoneLengths = state.zoneLengths.map(l=>Math.round(l*ratio));
+  state.armLength = v;
+  // Sync zone slider displays
+  ['la','lb','lc'].forEach((z,i)=>{
+    const el=document.getElementById('wi-'+z);
+    const vEl=document.getElementById('wi-'+z+'-val');
+    if(el){el.value=state.zoneLengths[i];vEl.textContent=state.zoneLengths[i]+' mm';}
+  });
+});
+// Zone length sliders — update zone independently, sync arm length readout
+['la','lb','lc'].forEach(function(z,i){
+  const el=document.getElementById('wi-'+z);
+  const vEl=document.getElementById('wi-'+z+'-val');
+  if(!el) return;
+  el.addEventListener('input',function(){
+    state.zoneLengths[i]=+this.value;
+    vEl.textContent=Math.round(+this.value)+' mm';
+    // Recompute total arm length and sync arm slider
+    const total=state.zoneLengths.reduce((a,b)=>a+b,0);
+    state.armLength=total;
+    const armEl=document.getElementById('wi-arm');
+    const armVEl=document.getElementById('wi-arm-val');
+    if(armEl){armEl.value=Math.min(5000,Math.max(1000,Math.round(total)));armVEl.textContent=Math.round(total)+' mm';}
+    render();
+  });
+});
 wireWI('wi-na','wi-na-val','',v=>state.nPerZone[0]=Math.round(v));
 wireWI('wi-nb','wi-nb-val','',v=>state.nPerZone[1]=Math.round(v));
 wireWI('wi-nc','wi-nc-val','',v=>state.nPerZone[2]=Math.round(v));
@@ -1400,6 +1495,7 @@ wireWI('wi-tc','wi-tc-val','°',v=>state.thetaMax[2]=v);
 document.getElementById('wi-mu').addEventListener('input',function(){
   state.mu=+this.value;
   document.getElementById('wi-mu-val').textContent=(+this.value).toFixed(3);
+  resetPeakForces();
   render();
 });
 ['mu-clean','mu-dusty','mu-collapse'].forEach(id=>{
@@ -1414,6 +1510,12 @@ document.getElementById('wi-mu').addEventListener('input',function(){
 document.getElementById('reset-geo').addEventListener('click',()=>{
   state.armLength=PARAMS_DEFAULT.armLength;state.nPerZone=PARAMS_DEFAULT.nPerZone.slice();
   state.thetaMax=PARAMS_DEFAULT.thetaMax.slice();state.taperDeg=PARAMS_DEFAULT.taperDeg.slice();
+  state.zoneLengths=PARAMS_DEFAULT.zoneLengths.slice();
+  ['wi-la','wi-lb','wi-lc'].forEach(function(id,i){
+    const el=document.getElementById(id);
+    const vEl=document.getElementById(id+'-val');
+    if(el){el.value=state.zoneLengths[i];vEl.textContent=state.zoneLengths[i]+' mm';}
+  });
   ['wi-arm','wi-na','wi-nb','wi-nc','wi-ta','wi-tb','wi-tc'].forEach((id,i)=>{
     const vals=[state.armLength,...state.nPerZone,...state.thetaMax];
     const sfx=[' mm','','','','°','°','°'];
