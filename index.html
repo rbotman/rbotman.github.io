@@ -53,7 +53,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 </head>
 <body>
 <div id="header">
-  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v29</span></h1>
+  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v31</span></h1>
   <div class="stat w56"><span class="stat-label">curl</span><span class="stat-value" id="st-curl">0°</span></div>
   <div class="stat w80"><span class="stat-label">tip ht</span><span class="stat-value" id="st-tip">— mm</span></div>
   <div class="stat w96"><span class="stat-label">reach</span><span class="stat-value" id="st-reach">— mm</span></div>
@@ -223,6 +223,21 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
         <button class="btn" data-cam="fit">fit all</button>
         <button class="btn" data-cam="rv_roof">rv roof</button>
       </div>
+      <div class="divider"></div>
+      <div class="row"><label>zoom (fills frame)</label>
+        <input type="range" id="tune-fill" min="0.30" max="1.20" value="0.85" step="0.01">
+        <span class="val" id="tune-fill-val">0.85</span></div>
+      <div class="row"><label>default dir X</label>
+        <input type="range" id="tune-dx" min="-1" max="1" value="1" step="0.05">
+        <span class="val" id="tune-dx-val">1.00</span></div>
+      <div class="row"><label>default dir Y</label>
+        <input type="range" id="tune-dy" min="-1" max="1" value="-0.45" step="0.05">
+        <span class="val" id="tune-dy-val">-0.45</span></div>
+      <div class="row"><label>default dir Z</label>
+        <input type="range" id="tune-dz" min="-1" max="1" value="0" step="0.05">
+        <span class="val" id="tune-dz-val">0.00</span></div>
+      <div class="row"><label style="font-size:9px;color:#7a9;line-height:1.3">Calibration only — these are viewport-INDEPENDENT. Drag to frame the default view, then read me the 4 numbers below. Resize the window to confirm framing holds.</label></div>
+      <div class="row"><textarea id="tune-out" readonly style="width:100%;height:30px;font-size:9px;background:#0a1420;color:#9cf;border:1px solid #2a3a4a;border-radius:4px;font-family:monospace"></textarea></div>
     </div>
 
     <div class="section">
@@ -1244,7 +1259,7 @@ const CAM_DIR = {
 const EYE_LEVEL_MM = 1525;
 // Fraction of the frame's limiting dimension the motion envelope should fill on a
 // fit (1.0 = touches the edges, lower = more margin). Single tunable for zoom level.
-const FRAME_FILL = 0.85;
+let FRAME_FILL = 0.85;   // viewport-INDEPENDENT zoom target (fraction of frame filled); tunable
 document.querySelectorAll('[data-cam]').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('[data-cam]').forEach(b=>b.classList.remove('active'));
@@ -1273,7 +1288,7 @@ const SR=(()=>{
   return{xy,zlo:-(maxArm+500),zhi:maxMntH+500};
 })();
 // Live render box (axis ranges). Defaults to full SR until first fit.
-let sceneBox = { xmin:-SR.xy, xmax:SR.xy, ymin:-SR.xy, ymax:SR.xy, zmin:SR.zlo, zmax:SR.zhi };
+let sceneBox = (()=>{const r=SR.xy;return{xmin:-r,xmax:r,ymin:-r,ymax:r,zmin:-r,zmax:r};})();  // cube default
 
 // ── Fit-arm-envelope camera ───────────────────────────────────────────────────
 // Plotly 3D camera model: eye/center/up are in normalised scene units.
@@ -1379,6 +1394,18 @@ function fitView(ex, ey, ez, mode){
 function fitArmEnvelope(){
   fitView(lastFitDir[0], lastFitDir[1], lastFitDir[2], lastFitMode);
 }
+// Re-fit whenever the window/viewport changes size, using the LIVE canvas aspect.
+// This is what makes framing viewport-independent: the distance math in fitView reads
+// plot.clientWidth/clientHeight each call, so a refit after resize reframes correctly
+// at any window shape. Debounced so dragging the window edge doesn't thrash.
+let _resizeTimer=null;
+window.addEventListener('resize',()=>{
+  clearTimeout(_resizeTimer);
+  _resizeTimer=setTimeout(()=>{
+    if(typeof Plotly!=='undefined'){try{Plotly.Plots.resize(document.getElementById('plot'));}catch(e){}}
+    fitArmEnvelope();   // re-frame with the new canvas aspect
+  },120);
+});
 
 // ── Render ────────────────────────────────────────────────────────────────────
 let plotInit=false;
@@ -1441,7 +1468,7 @@ function render(){
       xaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.xmin,sb.xmax],showspikes:false,showticklabels:false},
       yaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.ymin,sb.ymax],showspikes:false,showticklabels:false},
       zaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.zmin,sb.zmax],showspikes:false,showticklabels:false},
-      aspectmode:'data',
+      aspectmode:'manual',aspectratio:{x:1,y:1,z:1},
     },
   };
   const config={displayModeBar:true,modeBarButtonsToRemove:['toImage','sendDataToCloud'],
@@ -1677,6 +1704,32 @@ document.querySelectorAll('[data-overlay]').forEach(row=>{
 
 // Initial load: start framed on the full motion envelope from the default
 // (eye-level, out-of-reach side) view rather than the far static camera.
+// ── Camera-tune panel (calibration of viewport-independent FRAME_FILL + default dir) ──
+function _tuneRefresh(){
+  const out=document.getElementById('tune-out');
+  if(out) out.value='FRAME_FILL = '+FRAME_FILL.toFixed(2)+'\ndefault: ['+
+    CAM_DIR.default[0].toFixed(2)+', '+CAM_DIR.default[1].toFixed(2)+', '+CAM_DIR.default[2].toFixed(2)+']';
+}
+(function wireTune(){
+  const fill=document.getElementById('tune-fill');
+  if(fill) fill.addEventListener('input',function(){
+    FRAME_FILL=+this.value; document.getElementById('tune-fill-val').textContent=FRAME_FILL.toFixed(2);
+    fitArmEnvelope(); _tuneRefresh();
+  });
+  [['tune-dx',0],['tune-dy',1],['tune-dz',2]].forEach(([id,idx])=>{
+    const el=document.getElementById(id); if(!el) return;
+    el.addEventListener('input',function(){
+      CAM_DIR.default[idx]=+this.value;
+      document.getElementById(id+'-val').textContent=(+this.value).toFixed(2);
+      // Apply live as the default (eye) view so you see the framing immediately.
+      document.querySelectorAll('[data-cam]').forEach(b=>b.classList.remove('active'));
+      document.querySelector('[data-cam="default"]').classList.add('active');
+      fitView(CAM_DIR.default[0],CAM_DIR.default[1],CAM_DIR.default[2],'eye');
+      _tuneRefresh();
+    });
+  });
+  _tuneRefresh();
+})();
 fitView(CAM_DIR.default[0], CAM_DIR.default[1], CAM_DIR.default[2], 'eye');
 </script>
 </body>
