@@ -53,7 +53,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 </head>
 <body>
 <div id="header">
-  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v32</span></h1>
+  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v33</span></h1>
   <div class="stat w56"><span class="stat-label">curl</span><span class="stat-value" id="st-curl">0°</span></div>
   <div class="stat w80"><span class="stat-label">tip ht</span><span class="stat-value" id="st-tip">— mm</span></div>
   <div class="stat w96"><span class="stat-label">reach</span><span class="stat-value" id="st-reach">— mm</span></div>
@@ -1290,6 +1290,8 @@ const SR=(()=>{
 // Live render box (axis ranges). Defaults to full SR until first fit.
 let sceneBox = (()=>{const r=SR.xy;return{xmin:-r,xmax:r,ymin:-r,ymax:r,zmin:-r,zmax:r};})();  // cube default
 let _envCache = null;   // memoised program-independent envelope (recomputed on geometry/mount change)
+let _frameCtr = null;   // world-space envelope centre, set by fitView
+let _frameHalf = null;  // world-space envelope half-extents (padded), set by fitView
 
 // ── Fit-arm-envelope camera ───────────────────────────────────────────────────
 // Plotly 3D camera model: eye/center/up are in normalised scene units.
@@ -1357,25 +1359,21 @@ function fitView(ex, ey, ez, mode){
   // Half-extent → make a CUBE box around the envelope (so aspectmode:'data' renders an
   // undistorted cube and the camera distance is predictable). Margin keeps the arm off
   // the very edge.
-  const halfExtent = Math.max(wxmax-wxmin, wymax-wymin, wzmax-wzmin)/2;
-  // TIGHT cube around the envelope (no FRAME_FILL padding here — the camera applies the
-  // fill margin in frameCameraFromBounds, so it isn't double-counted). +2% so points
-  // aren't exactly on the box face.
-  const boxR = halfExtent * 1.02;
+  const PAD = 1.06;
+  const hx=(wxmax-wxmin)/2*PAD, hy=(wymax-wymin)/2*PAD, hz=(wzmax-wzmin)/2*PAD;
+  // TIGHT, NON-CUBE box around the envelope. The old code forced a CUBE (max span on all
+  // three axes); the arm envelope is tall/asymmetric, so the cube padded x/z hugely and the
+  // arm filled only ~1/3 of width and was framed by its bounding sphere -> rendered tiny and
+  // off-centre. With aspectmode 'data' (set in render()) Plotly preserves true proportions of
+  // THIS tight box, so the arm fills it by construction. PAD keeps points off the faces.
   sceneBox = {
-    xmin: wcx-boxR, xmax: wcx+boxR,
-    ymin: wcy-boxR, ymax: wcy+boxR,
-    zmin: wcz-boxR, zmax: wcz+boxR,
+    xmin: wcx-hx, xmax: wcx+hx,
+    ymin: wcy-hy, ymax: wcy+hy,
+    zmin: wcz-hz, zmax: wcz+hz,
   };
-
-  // With aspectmode 'data' and a cube box, normalised data space is isotropic: the box
-  // spans 2 units per side. The bounding SPHERE of the envelope has normalised radius
-  // r_n = halfExtent / boxR = FRAME_FILL (≤1). Plotly's fixed 45° vertical FOV (and the
-  // horizontal FOV from the real canvas aspect) set how far back the eye must sit.
-  // Camera is set from Plotly's ACTUAL normalised bounds after render (see
-  // frameCameraFromBounds). Here we just stash the requested direction + mode and
-  // trigger a render; the bounds-based framing runs once Plotly has laid out the box.
-  cam = cam || {eye:{x:-1.4,y:0.7,z:0.3},center:{x:0.07,y:0,z:0.54},up:{x:0,y:0,z:1}};
+  _frameCtr = {x:wcx, y:wcy, z:wcz};
+  _frameHalf = {x:hx, y:hy, z:hz};
+  cam = cam || {eye:{x:-1.4,y:0.7,z:0.3},center:{x:0,y:0,z:0},up:{x:0,y:0,z:1}};
   render();
   frameCameraFromBounds();
 }
@@ -1385,41 +1383,76 @@ function fitView(ex, ey, ez, mode){
 // eye = center − dir·D, where D = R / (sin(limitHalf)·FRAME_FILL), R = normalised bounding
 // sphere radius, limitHalf = min(vertical, horizontal) half-FOV from Plotly's fixed 45°
 // fovy and the REAL canvas aspect. Works at any viewport because it reads live values.
+function _projectNDC(){
+  const el=document.getElementById('plot');
+  const sc=el&&el._fullLayout&&el._fullLayout.scene&&el._fullLayout.scene._scene;
+  if(!sc||!sc.glplot||!sc.glplot.bounds||!sc.glplot.cameraParams) return null;
+  const b=sc.glplot.bounds, cp=sc.glplot.cameraParams;
+  if(!cp.view||!cp.projection) return null;
+  function mul(m,v){const o=[0,0,0,0];for(let r=0;r<4;r++){o[r]=m[r]*v[0]+m[r+4]*v[1]+m[r+8]*v[2]+m[r+12]*v[3];}return o;}
+  let xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9,wok=true;
+  for(const X of [0,1])for(const Y of [0,1])for(const Z of [0,1]){
+    const w=[b[X][0],b[Y][1],b[Z][2],1];
+    const pp=mul(cp.projection,mul(cp.view,w));
+    if(pp[3]<=0){wok=false;continue;}
+    const nx=pp[0]/pp[3], ny=pp[1]/pp[3];
+    if(nx<xmin)xmin=nx;if(nx>xmax)xmax=nx;if(ny<ymin)ymin=ny;if(ny>ymax)ymax=ny;
+  }
+  if(xmax<xmin) return null;
+  return {cx:(xmin+xmax)/2, cy:(ymin+ymax)/2, xs:xmax-xmin, ys:ymax-ymin, wok};
+}
+// Frame the camera by MEASURING the real on-screen projection and converging to it (NOT by
+// offline projection math, which was wrong against the real render in every prior attempt).
+// 1. seed eye/center in Plotly normalised data space (tight box -> data centre is (0,0,0));
+// 2. project the 8 data-box corners through the LIVE gl camera matrices to get their NDC bbox;
+// 3. pan (shift eye+center along screen right/up) to centre the NDC bbox at (0,0), and scale
+//    eye distance about the centre to drive the NDC fill span to 2*FRAME_FILL. A few damped
+//    passes converge. Survives later render()s because render() keeps aspectmode 'data' + the
+//    tight sceneBox + this cam.
 function frameCameraFromBounds(){
   const el=document.getElementById('plot');
   if(!el || !el._fullLayout || !el._fullLayout.scene || !el._fullLayout.scene._scene) return;
-  const glplot=el._fullLayout.scene._scene.glplot;
-  if(!glplot || !glplot.bounds) return;
-  const b=glplot.bounds;
-  const ctr=[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,(b[0][2]+b[1][2])/2];
-  let R=0;
-  for(const X of [0,1]) for(const Y of [0,1]) for(const Z of [0,1]){
-    R=Math.max(R, Math.hypot(b[X][0]-ctr[0], b[Y][1]-ctr[1], b[Z][2]-ctr[2]));
-  }
-  R=Math.max(R,1e-3);
-  const FOVY=glplot.fovy || Math.PI/4;
+  const sc=el._fullLayout.scene._scene;
+  if(!sc.glplot || !sc.glplot.bounds || !_frameHalf) return;
+  const hh=_frameHalf;
+  const maxHalf=Math.max(hh.x,hh.y,hh.z)||1;
+  let [dx,dy,dz]=lastFitDir;
+  if(lastFitMode==='eye'){ const hl=Math.hypot(dx,dy)||1; dx/=hl; dy/=hl; dz=Math.max(dz,0.16)+0.18*hl; }
+  const fl0=Math.hypot(dx,dy,dz)||1; dx/=fl0; dy/=fl0; dz/=fl0;
+  const up=(Math.abs(dz)>0.95)?{x:0,y:1,z:0}:{x:0,y:0,z:1};
+  const FOVY=(sc.glplot.fovy)||Math.PI/4;
   const cw=el.clientWidth||1200, ch=el.clientHeight||700;
   const halfV=FOVY/2, halfH=Math.atan(Math.tan(halfV)*(cw/ch));
-  const limitHalf=Math.min(halfV,halfH);
-  const D=R/(Math.sin(limitHalf)*FRAME_FILL);
-  // Direction (front-3/4 etc.) in normalised space. aspectratio is 1:1:1 (isotropic), so
-  // a world-space direction maps directly to the same normalised direction.
-  const [dx,dy,dz]=lastFitDir;
-  let ex,ey,ez,up={x:0,y:0,z:1};
-  if(lastFitMode==='eye'){
-    // Human view: keep the eye near 5ft height by flattening the vertical component, but
-    // still frame the whole envelope. Put eye in the horizontal direction at distance D,
-    // at a height a touch below centre so the camera tilts up at the high arm.
-    const hlen=Math.hypot(dx,dy)||1, hx=dx/hlen, hy=dy/hlen;
-    ex=ctr[0]-hx*D; ey=ctr[1]-hy*D; ez=ctr[2]-Math.max(dz,0.12)*D*0.45;
-  } else {
-    ex=ctr[0]-dx*D; ey=ctr[1]-dy*D; ez=ctr[2]-dz*D;
-    if(Math.abs(dz)>0.9) up={x:0,y:1,z:0};
+  const ndx=dx*(hh.x/maxHalf), ndy=dy*(hh.y/maxHalf), ndz=dz*(hh.z/maxHalf);
+  const ndl=Math.hypot(ndx,ndy,ndz)||1;
+  const dirN=[ndx/ndl, ndy/ndl, ndz/ndl];
+  let Dn=2.4;
+  let center={x:0,y:0,z:0};
+  let eye={x:-dirN[0]*Dn, y:-dirN[1]*Dn, z:-dirN[2]*Dn};
+  function setCam(){ cam={eye:{x:eye.x,y:eye.y,z:eye.z},center:{x:center.x,y:center.y,z:center.z},up};
+    try{ Plotly.relayout(el,{'scene.camera':cam}); }catch(e){} }
+  setCam();
+  const TARGET=2*FRAME_FILL;
+  for(let it=0; it<10; it++){
+    const m=_projectNDC();
+    if(!m){ eye.x*=1.5; eye.y*=1.5; eye.z*=1.5; setCam(); continue; }
+    const fill=Math.max(m.xs,m.ys);
+    const centred=Math.abs(m.cx)<0.02 && Math.abs(m.cy)<0.02;
+    const sized=fill>0 && Math.abs(fill/TARGET-1)<0.03;
+    if(centred && sized) break;
+    let fx=center.x-eye.x, fy=center.y-eye.y, fz=center.z-eye.z;
+    const D=Math.hypot(fx,fy,fz)||1; fx/=D; fy/=D; fz/=D;
+    let rx=fy*up.z-fz*up.y, ry=fz*up.x-fx*up.z, rz=fx*up.y-fy*up.x;
+    const rl=Math.hypot(rx,ry,rz)||1; rx/=rl; ry/=rl; rz/=rl;
+    let ux=ry*fz-rz*fy, uy=rz*fx-rx*fz, uz=rx*fy-ry*fx;
+    const gR=m.cx*Math.tan(halfH)*D, gU=m.cy*Math.tan(halfV)*D;
+    center.x+=rx*gR+ux*gU; center.y+=ry*gR+uy*gU; center.z+=rz*gR+uz*gU;
+    eye.x+=rx*gR+ux*gU; eye.y+=ry*gR+uy*gU; eye.z+=rz*gR+uz*gU;
+    if(fill>1e-4){ const sc2=fill/TARGET;
+      eye.x=center.x+(eye.x-center.x)*sc2; eye.y=center.y+(eye.y-center.y)*sc2; eye.z=center.z+(eye.z-center.z)*sc2; }
+    setCam();
   }
-  cam={eye:{x:ex,y:ey,z:ez},center:{x:ctr[0],y:ctr[1],z:ctr[2]},up};
-  try{ Plotly.relayout(el,{'scene.camera':cam}); }catch(e){}
 }
-
 // fitArmEnvelope: re-zoom to fit arm keeping current look direction.
 // Uses lastFitDir — never re-reads from live camera (which has inverted signs).
 function fitArmEnvelope(){
@@ -1499,7 +1532,7 @@ function render(){
       xaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.xmin,sb.xmax],showspikes:false,showticklabels:false},
       yaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.ymin,sb.ymax],showspikes:false,showticklabels:false},
       zaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.zmin,sb.zmax],showspikes:false,showticklabels:false},
-      aspectmode:'manual',aspectratio:{x:1,y:1,z:1},
+      aspectmode:'data',  // tight non-cube sceneBox renders undistorted; framing centres it
     },
   };
   const config={displayModeBar:true,modeBarButtonsToRemove:['toImage','sendDataToCloud'],
