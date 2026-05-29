@@ -53,7 +53,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 </head>
 <body>
 <div id="header">
-  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v26</span></h1>
+  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v29</span></h1>
   <div class="stat w56"><span class="stat-label">curl</span><span class="stat-value" id="st-curl">0°</span></div>
   <div class="stat w80"><span class="stat-label">tip ht</span><span class="stat-value" id="st-tip">— mm</span></div>
   <div class="stat w96"><span class="stat-label">reach</span><span class="stat-value" id="st-reach">— mm</span></div>
@@ -1232,16 +1232,19 @@ document.getElementById('plot').addEventListener('wheel',readCam);
 document.getElementById('plot').addEventListener('touchend',readCam);
 // Canonical look directions for each angle button (fitView normalises these)
 const CAM_DIR = {
-  default: [ 0.15, -1.0,  0.05],  // person to the side, out of reach, ~5ft eye level
-  front:   [ 1.0,  -0.05, 0.05],  // facing the curl direction (+X, away from RV)
-  side:    [ 0.05, -1.0,  0.05],  // straight from the side
-  top:     [ 0.0,   0.0,  1.0],
-  iso:     [ 1.0,  -1.0,  0.6],
-  rv_roof: [ 0.15, -0.15, -1.0],  // above arm, slightly toward front-right, looking down
+  default: [ 1.0,  -0.45, 0.0],   // front-3/4: facing the arm (+X) with a 3/4 side angle
+  front:   [ 1.0,   0.0,  0.0],   // straight on, facing the curl direction (+X)
+  side:    [ 0.0,  -1.0,  0.0],   // straight from the side (-Y)
+  top:     [ 0.0,   0.0,  1.0],   // straight down
+  iso:     [ 1.0,  -1.0,  0.6],   // 3/4 isometric
+  rv_roof: [ 0.15, -0.15, -1.0],  // above arm, looking down
 };
 // Human eye level (~5 ft) in world mm — used to anchor the default/side/front
 // views at a standing observer's height rather than the arm-envelope midpoint.
 const EYE_LEVEL_MM = 1525;
+// Fraction of the frame's limiting dimension the motion envelope should fill on a
+// fit (1.0 = touches the edges, lower = more margin). Single tunable for zoom level.
+const FRAME_FILL = 0.85;
 document.querySelectorAll('[data-cam]').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('[data-cam]').forEach(b=>b.classList.remove('active'));
@@ -1251,17 +1254,26 @@ document.querySelectorAll('[data-cam]').forEach(btn=>{
       fitArmEnvelope();   // preserve current direction, re-zoom to fit
     } else {
       const d = CAM_DIR[key] || CAM_DIR.default;
-      fitView(d[0], d[1], d[2]);   // set canonical direction + fit-zoom
+      const mode = (key === 'default') ? 'eye' : 'cad';  // default = human view; rest = CAD
+      fitView(d[0], d[1], d[2], mode);   // set canonical direction + fit-zoom
     }
   });
 });
 
 // ── Scene bounds ──────────────────────────────────────────────────────────────
+// SR is the FULL world box (sized for the 3m safety perimeter + 5m max what-if arm) —
+// used to draw the ground/RV/safety overlays. But framing the arm inside this huge box
+// makes it tiny, so a fit computes a TIGHT box (sceneBox) around the actual envelope and
+// the layout renders the axes at those tight ranges with aspectmode 'data'. Overlays
+// still draw at true world coords; they simply extend past the tight box and clip — fine
+// for an arm-focused view.
 const SR=(()=>{
   const maxArm=5000,maxMntH=3200,maxSep=2590,r=ENV.safety_r;
   const xy=Math.max(maxArm+500,r+500,maxSep/2+500);
   return{xy,zlo:-(maxArm+500),zhi:maxMntH+500};
 })();
+// Live render box (axis ranges). Defaults to full SR until first fit.
+let sceneBox = { xmin:-SR.xy, xmax:SR.xy, ymin:-SR.xy, ymax:SR.xy, zmin:SR.zlo, zmax:SR.zhi };
 
 // ── Fit-arm-envelope camera ───────────────────────────────────────────────────
 // Plotly 3D camera model: eye/center/up are in normalised scene units.
@@ -1273,8 +1285,15 @@ const SR=(()=>{
 // lastFitDir stores the CURRENT look direction so fit-all can re-zoom
 // without re-reading from the live camera (which has inverted signs).
 let lastFitDir = [1, -1.2, 0.6];
+let lastFitMode = 'cad';   // 'eye' = default human view; 'cad' = engineering views
 
-function fitView(ex, ey, ez){
+function fitView(ex, ey, ez, mode){
+  // mode: 'eye' = default human view (eye anchored at ~5ft, looks at envelope centre,
+  // standing far enough that the WHOLE motion envelope is framed — any program plays
+  // without moving the camera). 'cad' = engineering view, arm dead-centre, eye and
+  // look-at both on the envelope centre. Defaults to 'cad'.
+  mode = mode || 'cad';
+  lastFitMode = mode;
   // Remember this direction for subsequent fit-all presses.
   const nd = Math.sqrt(ex*ex+ey*ey+ez*ez)||1;
   lastFitDir = [ex/nd, ey/nd, ez/nd];
@@ -1298,52 +1317,67 @@ function fitView(ex, ey, ez){
     for(const p of a2) allPts.push(p);
   }
 
-  // Convert world points to Plotly normalised space.
-  // Scene: xrange=[-xy,xy] yrange=[-xy,xy] zrange=[zlo,zhi] aspectratio {x:1.6,y:1.6,z:1}
-  const {xy, zlo, zhi} = SR;
-  const zmid = (zlo + zhi) / 2, zhalf = (zhi - zlo) / 2;
-  const aspect = 1.6;
-  const toP = p => [ p[0]/xy*aspect, p[1]/xy*aspect, (p[2]-zmid)/zhalf ];
-
-  // Bounding sphere of the arm in Plotly normalised space.
-  const pp = allPts.map(toP);
-  let cx=0,cy=0,cz=0;
-  pp.forEach(([px,py,pz])=>{ cx+=px; cy+=py; cz+=pz; });
-  cx/=pp.length; cy/=pp.length; cz/=pp.length;
-  let R=0;
-  pp.forEach(([px,py,pz])=>{
-    R = Math.max(R, Math.sqrt((px-cx)**2+(py-cy)**2+(pz-cz)**2));
-  });
-  R = Math.max(R, 0.08);
-
-  // At eye-distance D from center, Plotly shows a sphere of radius ~D.
-  // fill=0.72 keeps 28% margin; slightly looser for top-down (more arm spread in xy).
-  const fill = Math.abs(dz) > 0.8 ? 0.62 : 0.72;
-  const D = R / fill;
-
-  // For near-horizontal views (default / side / front), an observer is standing on
-  // the ground looking across at the arm — so the look-at height should be human eye
-  // level (~5 ft), not the arm-envelope midpoint (which sits high up the 3m arm).
-  // We re-anchor center.z to EYE_LEVEL_MM in normalised space and keep the eye at the
-  // same height so the line of sight is level. D stays as computed so the full
-  // envelope still fits within the viewport sphere.
-  let ccz = cz;
-  if(Math.abs(dz) < 0.35){
-    ccz = (EYE_LEVEL_MM - zmid) / zhalf;   // human eye level in normalised z
+  // World-space bounding box of the envelope.
+  let wxmin=1e9,wxmax=-1e9,wymin=1e9,wymax=-1e9,wzmin=1e9,wzmax=-1e9;
+  for(const p of allPts){
+    wxmin=Math.min(wxmin,p[0]); wxmax=Math.max(wxmax,p[0]);
+    wymin=Math.min(wymin,p[1]); wymax=Math.max(wymax,p[1]);
+    wzmin=Math.min(wzmin,p[2]); wzmax=Math.max(wzmax,p[2]);
   }
-  cam = {
-    eye:    { x: cx - dx*D, y: cy - dy*D, z: ccz - dz*D },
-    center: { x: cx, y: cy, z: ccz },
-    up:     { x: 0, y: 0, z: 1 }
+  const wcx=(wxmin+wxmax)/2, wcy=(wymin+wymax)/2, wcz=(wzmin+wzmax)/2;
+  // Half-extent → make a CUBE box around the envelope (so aspectmode:'data' renders an
+  // undistorted cube and the camera distance is predictable). Margin keeps the arm off
+  // the very edge.
+  const halfExtent = Math.max(wxmax-wxmin, wymax-wymin, wzmax-wzmin)/2;
+  const boxR = halfExtent * (1/FRAME_FILL);          // padded cube half-size
+  sceneBox = {
+    xmin: wcx-boxR, xmax: wcx+boxR,
+    ymin: wcy-boxR, ymax: wcy+boxR,
+    zmin: wcz-boxR, zmax: wcz+boxR,
   };
-  if(Math.abs(dz) > 0.9) cam.up = {x:0, y:1, z:0};
+
+  // With aspectmode 'data' and a cube box, normalised data space is isotropic: the box
+  // spans 2 units per side. The bounding SPHERE of the envelope has normalised radius
+  // r_n = halfExtent / boxR = FRAME_FILL (≤1). Plotly's fixed 45° vertical FOV (and the
+  // horizontal FOV from the real canvas aspect) set how far back the eye must sit.
+  const FOVY = Math.PI/4;
+  const plotEl = document.getElementById('plot');
+  const cw = (plotEl && plotEl.clientWidth)  || 1200;
+  const ch = (plotEl && plotEl.clientHeight) || 700;
+  const halfV = FOVY/2;
+  const halfH = Math.atan(Math.tan(halfV) * (cw/ch));
+  const limitHalf = Math.min(halfV, halfH);
+  const r_n = FRAME_FILL;                              // sphere radius in box-normalised units
+  // Eye distance in box-normalised units (centre→eye). Box spans ±1, so this is in the
+  // same units Plotly's camera.eye uses when aspectmode='data' with a cube.
+  const Dn = r_n / Math.sin(limitHalf);
+
+  if(mode === 'eye'){
+    // Front-3/4 human view: eye at ~5ft world height, standoff Dn in the horizontal
+    // plane, looking at the envelope centre (camera tilts up at the high arm).
+    const eyeZn = (EYE_LEVEL_MM - wcz) / boxR;         // eye level relative to centre, box units
+    const hlen = Math.hypot(dx, dy) || 1;
+    const hx = dx/hlen, hy = dy/hlen;
+    cam = {
+      eye:    { x: -hx*Dn, y: -hy*Dn, z: eyeZn },      // relative to centre (data aspect → centred)
+      center: { x: 0, y: 0, z: 0 },
+      up:     { x: 0, y: 0, z: 1 }
+    };
+  } else {
+    cam = {
+      eye:    { x: -dx*Dn, y: -dy*Dn, z: -dz*Dn },
+      center: { x: 0, y: 0, z: 0 },
+      up:     { x: 0, y: 0, z: 1 }
+    };
+    if(Math.abs(dz) > 0.9) cam.up = {x:0, y:1, z:0};
+  }
   render();
 }
 
 // fitArmEnvelope: re-zoom to fit arm keeping current look direction.
 // Uses lastFitDir — never re-reads from live camera (which has inverted signs).
 function fitArmEnvelope(){
-  fitView(lastFitDir[0], lastFitDir[1], lastFitDir[2]);
+  fitView(lastFitDir[0], lastFitDir[1], lastFitDir[2], lastFitMode);
 }
 
 // ── Render ────────────────────────────────────────────────────────────────────
@@ -1398,16 +1432,16 @@ function render(){
     ...(state.overlays.lop&&state.overlays.arm2?ghostTrace(lop2[0],lop2[1]):[]),
   ];
 
-  const {xy,zlo,zhi}=SR;
+  const sb=sceneBox;
   const layout={
     paper_bgcolor:activePalette.bg,plot_bgcolor:activePalette.bg,margin:{l:0,r:0,t:0,b:0},
     hovermode:false,
     scene:{
       bgcolor:activePalette.bg,camera:cam,
-      xaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[-xy,xy],showspikes:false,showticklabels:false},
-      yaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[-xy,xy],showspikes:false,showticklabels:false},
-      zaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[zlo,zhi],showspikes:false,showticklabels:false},
-      aspectmode:'manual',aspectratio:{x:1.6,y:1.6,z:1},
+      xaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.xmin,sb.xmax],showspikes:false,showticklabels:false},
+      yaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.ymin,sb.ymax],showspikes:false,showticklabels:false},
+      zaxis:{title:'',color:'#6688aa',gridcolor:activePalette.grid,zerolinecolor:activePalette.zero,range:[sb.zmin,sb.zmax],showspikes:false,showticklabels:false},
+      aspectmode:'data',
     },
   };
   const config={displayModeBar:true,modeBarButtonsToRemove:['toImage','sendDataToCloud'],
@@ -1643,7 +1677,7 @@ document.querySelectorAll('[data-overlay]').forEach(row=>{
 
 // Initial load: start framed on the full motion envelope from the default
 // (eye-level, out-of-reach side) view rather than the far static camera.
-fitView(CAM_DIR.default[0], CAM_DIR.default[1], CAM_DIR.default[2]);
+fitView(CAM_DIR.default[0], CAM_DIR.default[1], CAM_DIR.default[2], 'eye');
 </script>
 </body>
 </html>
