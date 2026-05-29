@@ -53,13 +53,14 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 </head>
 <body>
 <div id="header">
-  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v24</span></h1>
+  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v26</span></h1>
   <div class="stat w56"><span class="stat-label">curl</span><span class="stat-value" id="st-curl">0°</span></div>
   <div class="stat w80"><span class="stat-label">tip ht</span><span class="stat-value" id="st-tip">— mm</span></div>
   <div class="stat w96"><span class="stat-label">reach</span><span class="stat-value" id="st-reach">— mm</span></div>
   <div class="stat w80"><span class="stat-label">lop tip</span><span class="stat-value stat-warn" id="st-lop">— mm</span></div>
   <div class="stat w72"><span class="stat-label">arm wt</span><span class="stat-value" id="st-wt">— kg</span></div>
   <div class="stat w80"><span class="stat-label">spine T</span><span class="stat-value" id="st-spine">— N</span></div>
+  <div class="stat w80"><span class="stat-label">spine seat</span><span class="stat-value" id="st-spineseat">— N</span></div>
   <div class="stat w80"><span class="stat-label">tip ten</span><span class="stat-value" id="st-tipten">— %</span></div>
   <div class="stat w110"><span class="stat-label">motion</span><span class="stat-value" id="st-prog">planar curl</span></div>
   <div class="stat w72"><span class="stat-label">frame</span><span class="stat-value" id="st-frame">0/47</span></div>
@@ -187,6 +188,11 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
         <button class="btn" id="mu-dusty" style="font-size:9px">dusty (0.10)</button>
         <button class="btn" id="mu-collapse" style="font-size:9px">collapse (0.26)</button>
       </div>
+      <div class="divider"></div>
+      <div class="row"><label>spine seat</label>
+        <input type="range" id="wi-spine" min="0" max="120" value="30" step="5">
+        <span class="val" id="wi-spine-val">30 N</span></div>
+      <div class="row"><label style="font-size:8px;color:#667;line-height:1.3">central-tendon at-rest seating preload (power-off vertical hang). Lines pull against it to curl.</label></div>
     </div>
 
     <div class="section">
@@ -258,6 +264,7 @@ let state = {
   thetaMax:ENV.theta_max.slice(), taperDeg:ENV.taper_deg.slice(),
   skinBaseR: ENV.skin_base_r,
   mu: ENV.mu_clean,  // current friction coefficient
+  spineSeat: (typeof ENV.spine_seat_n==='number')?ENV.spine_seat_n:30.0,  // central-tendon at-rest seating preload (N)
   overlays:{ground:true,rv:true,safety:true,lop:true,arm2:false,fairlead:true,skin:true,triad:true},
   lopStartThetas:null, lopStartPhis:null,
 };
@@ -462,13 +469,82 @@ function computeFriction(thetas){
 
 
 const LINE_AZ=ENV.line_azimuths_deg,PRE=ENV.pretension_n;
-function computeLineForces(thetas,phis){
+// Central-tendon seating preload. Sized to keep the bones stacked/seated when the
+// arm hangs straight down with NO power applied (the at-rest droop) — NOT to hold a
+// pose against gravity. It is therefore a roughly constant axial force the control
+// lines must articulate against, independent of mount angle and curl. ANALYTICAL
+// target; replace with measured spring rate when Stage 2 characterises it (params.py
+// CENTRAL_TENDON_SPRING_RATE_N_PER_MM is still None). Shared by the 3 lines, so each
+// active line works against ~SPINE_SEAT_N/3 of it at the base.
+// Live value comes from state.spineSeat (slider-tunable); default in state init.
+// Line-force model.
+// The 3 cables sit at fixed azimuths (0/120/240 deg) in the SAME phi space that
+// fk3d uses for bend direction. A joint that bends by theta_i toward azimuth phi_i
+// is commanded by pulling whichever line(s) lie in that direction. We therefore
+// sum every curling joint as a vector theta_i*(cos phi_i, sin phi_i), normalised by
+// its zone theta_max so each zone contributes its curl FRACTION rather than its raw
+// angle (Zone C's 20deg shouldn't out-vote Zone A's 30deg per-joint). The resultant
+// gives a single commanded azimuth Phi and a curl-demand magnitude. Each line tension
+// is then T_i = max(PRE, m*cos(Phi - az_i)) — the line nearest the bend reels in, the
+// others pay out toward pretension. Summing over ALL joints (not just Zone B) is the
+// fix: lateral_sweep bends in Zone A, so a Zone-B-only average saw phi=0 and lit only L1.
+// Total force the MOTOR on each line must handle. This is a SUM of every resistance
+// the reeling line works against — not just the kinematic curl demand:
+//   (1) kinematic curl demand  — tip-side tension to bend the joints to the commanded
+//                                 pose, in the line nearest the bend direction Phi;
+//   (2) capstan friction       — the demand is delivered at the TIP, but the motor pulls
+//                                 at the BASE through every fairlead, so it must supply
+//                                 T_motor = T_tip / tipFrac, where tipFrac=exp(-mu*Sum th/2)
+//                                 (<1, so friction AMPLIFIES the base/motor tension);
+//   (3) opposing-line drag     — while one line reels, the other two still hold their
+//                                 pretension PRE; their pull has a component opposing the
+//                                 reeling line, which it must overcome;
+//   (4) spine seating preload  — the constant central-tendon seating force the lines
+//                                 articulate against (SPINE_SEAT_N, shared 3 ways).
+// fric is the result of computeFriction(thetas) (tipFrac in (0,1]); passed in so the
+// friction and force models stay consistent (previously friction was display-only).
+function computeLineForces(thetas,phis,fric){
   const nj=state.nPerZone.reduce((a,b)=>a+b,0)-1;
-  let sp=0,st=0,cb=0;
-  for(let i=0;i<nj;i++)if(zoneOf(i,state.nPerZone)===1){sp+=phis[i];st+=thetas[i];cb++;}
-  if(!cb)return[PRE,PRE,PRE];
-  const tArm=sp/cb,dem=(st/cb)/state.thetaMax[1],m=dem*300;
-  return LINE_AZ.map(az=>Math.max(PRE,m*Math.cos((tArm-az)*Math.PI/180)));
+  let vx=0,vy=0,dem=0;
+  for(let i=0;i<nj;i++){
+    const zi=zoneOf(i,state.nPerZone), tmax=state.thetaMax[zi]||1;
+    const w=Math.abs(thetas[i])/tmax;          // 0..1 curl fraction for this joint
+    const ph=phis[i]*Math.PI/180;
+    vx+=w*Math.cos(ph); vy+=w*Math.sin(ph);
+    dem+=w;
+  }
+  const tipFrac=(fric&&fric.tipFrac>1e-3)?fric.tipFrac:1.0;
+  const spineShare=state.spineSeat/3;          // (4) per-line share of seating preload
+  if(dem<1e-6){
+    // Straight arm: no curl demand, but each motor still holds pretension + its share
+    // of the spine seating load. (Friction on ~0 wrap angle is negligible.)
+    const base=PRE+spineShare;
+    return [base,base,base];
+  }
+  const Phi=Math.atan2(vy,vx)*180/Math.PI;     // commanded resultant azimuth (deg)
+  const coherence=Math.sqrt(vx*vx+vy*vy)/nj;   // 0..1; 1 = whole arm bends one way
+  const mTip=coherence*300;                    // (1) tip-side curl demand magnitude
+  return LINE_AZ.map(az=>{
+    const align=Math.cos((Phi-az)*Math.PI/180);  // -1..1: how aligned this line is with bend
+    // (1)+(2): only the aligned (reeling) component is delivered through the fairleads,
+    // so only it is amplified by friction. Paying-out lines (align<=0) carry no curl demand.
+    const curlTip=Math.max(0,mTip*align);
+    const curlMotor=curlTip/tipFrac;
+    // (3) opposing-line drag: the lines NOT reeling hold PRE; their opposing component
+    // resists this line. For the reeling line this sums to ~PRE at 120deg spacing.
+    let oppDrag=0;
+    for(const az2 of LINE_AZ){
+      if(az2===az) continue;
+      const a=Math.cos((az-az2)*Math.PI/180);
+      if(a<0) oppDrag += PRE*(-a);            // only the opposing (negative) component
+    }
+    // Paying-out lines just hold pretension; reeling line adds curl+friction+drag+spine.
+    const isReeling = align>0.001;
+    const total = isReeling
+      ? PRE + curlMotor + oppDrag + spineShare
+      : PRE + spineShare;                      // holding line: pretension + spine share
+    return Math.max(PRE, total);
+  });
 }
 const PEAK_WARN_N=300; // color peaks red above this force
 function updateForces(forces){
@@ -522,7 +598,7 @@ function buildMotionFrames(prog,nPerZone,thetaMax){
       const zi=zoneOf(i,nPerZone),tmax=thetaMax[zi];
       let th=0,ph=0;
       if(prog==='planar_curl'){th=frac*tmax;ph=0;}
-      else if(prog==='lateral_sweep'){th=frac*tmax;ph=zi===0?90:0;}
+      else if(prog==='lateral_sweep'){th=0.85*tmax;ph=90+180*frac;}
       else if(prog==='sweep'){
         // Hardware-faithful: global phi rotates 0→360 while theta holds steady.
         // All joints same ph = same (T1,T2,T3) resultant direction rotating over time.
@@ -1156,13 +1232,16 @@ document.getElementById('plot').addEventListener('wheel',readCam);
 document.getElementById('plot').addEventListener('touchend',readCam);
 // Canonical look directions for each angle button (fitView normalises these)
 const CAM_DIR = {
-  default: [ 1.0, -1.2,  0.6],
-  front:   [ 0.0, -1.0,  0.1],
-  side:    [ 1.0,  0.0,  0.1],
-  top:     [ 0.0,  0.0,  1.0],
-  iso:     [ 1.0, -1.0,  0.8],
+  default: [ 0.15, -1.0,  0.05],  // person to the side, out of reach, ~5ft eye level
+  front:   [ 1.0,  -0.05, 0.05],  // facing the curl direction (+X, away from RV)
+  side:    [ 0.05, -1.0,  0.05],  // straight from the side
+  top:     [ 0.0,   0.0,  1.0],
+  iso:     [ 1.0,  -1.0,  0.6],
   rv_roof: [ 0.15, -0.15, -1.0],  // above arm, slightly toward front-right, looking down
 };
+// Human eye level (~5 ft) in world mm — used to anchor the default/side/front
+// views at a standing observer's height rather than the arm-envelope midpoint.
+const EYE_LEVEL_MM = 1525;
 document.querySelectorAll('[data-cam]').forEach(btn=>{
   btn.addEventListener('click',()=>{
     document.querySelectorAll('[data-cam]').forEach(b=>b.classList.remove('active'));
@@ -1201,16 +1280,23 @@ function fitView(ex, ey, ez){
   lastFitDir = [ex/nd, ey/nd, ez/nd];
   const [dx,dy,dz] = lastFitDir;
 
-  // Build current arm FK points in world coords.
+  // Build the FULL MOTION ENVELOPE: union of arm FK points across EVERY frame of
+  // the current program, both arms. This way the whole sweep stays in frame and the
+  // arm never leaves the viewport during playback — one click shows the model from a
+  // given angle with all motion contained.
   const lengths = boneLengths(state.nPerZone, state.taperDeg, state.thetaMax, state.armLength);
   const nj = state.nPerZone.reduce((a,b)=>a+b,0)-1;
   const frames = getMotionFrames(state.prog, state.nPerZone, state.thetaMax);
-  const mf = frames[state.frame] || {thetas:Array(nj).fill(0), phis:Array(nj).fill(0)};
-  const raw = fk3d(mf.thetas, mf.phis, lengths);
   const sep = state.armSep / 2;
-  const arm1 = applyMount(raw, state.mountAngle, state.mountH,  sep);
-  const arm2 = applyMount(raw, state.mountAngle, state.mountH, -sep);
-  const allPts = [...arm1, ...arm2];
+  const allPts = [];
+  const FF = (frames && frames.length) ? frames : [{thetas:Array(nj).fill(0), phis:Array(nj).fill(0)}];
+  for(const mf of FF){
+    const raw = fk3d(mf.thetas, mf.phis, lengths);
+    const a1 = applyMount(raw, state.mountAngle, state.mountH,  sep);
+    const a2 = applyMount(raw, state.mountAngle, state.mountH, -sep);
+    for(const p of a1) allPts.push(p);
+    for(const p of a2) allPts.push(p);
+  }
 
   // Convert world points to Plotly normalised space.
   // Scene: xrange=[-xy,xy] yrange=[-xy,xy] zrange=[zlo,zhi] aspectratio {x:1.6,y:1.6,z:1}
@@ -1235,9 +1321,19 @@ function fitView(ex, ey, ez){
   const fill = Math.abs(dz) > 0.8 ? 0.62 : 0.72;
   const D = R / fill;
 
+  // For near-horizontal views (default / side / front), an observer is standing on
+  // the ground looking across at the arm — so the look-at height should be human eye
+  // level (~5 ft), not the arm-envelope midpoint (which sits high up the 3m arm).
+  // We re-anchor center.z to EYE_LEVEL_MM in normalised space and keep the eye at the
+  // same height so the line of sight is level. D stays as computed so the full
+  // envelope still fits within the viewport sphere.
+  let ccz = cz;
+  if(Math.abs(dz) < 0.35){
+    ccz = (EYE_LEVEL_MM - zmid) / zhalf;   // human eye level in normalised z
+  }
   cam = {
-    eye:    { x: cx - dx*D, y: cy - dy*D, z: cz - dz*D },
-    center: { x: cx, y: cy, z: cz },
+    eye:    { x: cx - dx*D, y: cy - dy*D, z: ccz - dz*D },
+    center: { x: cx, y: cy, z: ccz },
     up:     { x: 0, y: 0, z: 1 }
   };
   if(Math.abs(dz) > 0.9) cam.up = {x:0, y:1, z:0};
@@ -1287,8 +1383,8 @@ function render(){
 
   const lop1=lopGhostPts(state.mountH, sep);
   const lop2=lopGhostPts(state.mountH,-sep);
-  updateForces(computeLineForces(mf.thetas,mf.phis));
   const fricData=computeFriction(mf.thetas);
+  updateForces(computeLineForces(mf.thetas,mf.phis,fricData));
 
   const traces=[
     ...envTraces(),
@@ -1333,6 +1429,14 @@ function render(){
   const spineEl=document.getElementById('st-spine');
   spineEl.textContent=Math.round(spineT)+' N';
   spineEl.className='stat-value'+(spineT>350?' stat-warn':spineT>200?' stat-warn':' stat-ok');
+  // spine seat sufficiency: the lines pull against this constant seating preload.
+  // Too low (<~10N): bones may unseat / arm droops at rest. Too high: the reeling
+  // line spends its budget fighting the spine instead of curling — flag if the seat's
+  // per-line share alone is a large fraction of the motor working force (motor_force_n).
+  const seatEl=document.getElementById('st-spineseat');
+  const seatShare=state.spineSeat/3;
+  seatEl.textContent=Math.round(state.spineSeat)+' N';
+  seatEl.className='stat-value'+(state.spineSeat<10?' stat-warn':(seatShare>ENV.motor_force_n?' stat-warn':' stat-ok'));
   const tipPct=Math.round(fricData.tipFrac*100);
   const ttEl=document.getElementById('st-tipten');
   ttEl.textContent=tipPct+'%';
@@ -1491,11 +1595,18 @@ wireWI('wi-na','wi-na-val','',v=>state.nPerZone[0]=Math.round(v));
 wireWI('wi-nb','wi-nb-val','',v=>state.nPerZone[1]=Math.round(v));
 wireWI('wi-nc','wi-nc-val','',v=>state.nPerZone[2]=Math.round(v));
 wireWI('wi-ta','wi-ta-val','°',v=>state.thetaMax[0]=v);
+wireWI('wi-tb','wi-tb-val','°',v=>state.thetaMax[1]=v);
 wireWI('wi-tc','wi-tc-val','°',v=>state.thetaMax[2]=v);
 document.getElementById('wi-mu').addEventListener('input',function(){
   state.mu=+this.value;
   document.getElementById('wi-mu-val').textContent=(+this.value).toFixed(3);
   resetPeakForces();
+  render();
+});
+document.getElementById('wi-spine').addEventListener('input',function(){
+  state.spineSeat=+this.value;
+  document.getElementById('wi-spine-val').textContent=Math.round(+this.value)+' N';
+  resetPeakForces();   // line totals change → peaks must reset
   render();
 });
 ['mu-clean','mu-dusty','mu-collapse'].forEach(id=>{
@@ -1530,7 +1641,9 @@ document.querySelectorAll('[data-overlay]').forEach(row=>{
   });
 });
 
-render();
+// Initial load: start framed on the full motion envelope from the default
+// (eye-level, out-of-reach side) view rather than the far static camera.
+fitView(CAM_DIR.default[0], CAM_DIR.default[1], CAM_DIR.default[2]);
 </script>
 </body>
 </html>
