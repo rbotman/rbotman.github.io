@@ -53,7 +53,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 </head>
 <body>
 <div id="header">
-  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v31</span></h1>
+  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v32</span></h1>
   <div class="stat w56"><span class="stat-label">curl</span><span class="stat-value" id="st-curl">0°</span></div>
   <div class="stat w80"><span class="stat-label">tip ht</span><span class="stat-value" id="st-tip">— mm</span></div>
   <div class="stat w96"><span class="stat-label">reach</span><span class="stat-value" id="st-reach">— mm</span></div>
@@ -1289,6 +1289,7 @@ const SR=(()=>{
 })();
 // Live render box (axis ranges). Defaults to full SR until first fit.
 let sceneBox = (()=>{const r=SR.xy;return{xmin:-r,xmax:r,ymin:-r,ymax:r,zmin:-r,zmax:r};})();  // cube default
+let _envCache = null;   // memoised program-independent envelope (recomputed on geometry/mount change)
 
 // ── Fit-arm-envelope camera ───────────────────────────────────────────────────
 // Plotly 3D camera model: eye/center/up are in normalised scene units.
@@ -1301,6 +1302,11 @@ let sceneBox = (()=>{const r=SR.xy;return{xmin:-r,xmax:r,ymin:-r,ymax:r,zmin:-r,
 // without re-reading from the live camera (which has inverted signs).
 let lastFitDir = [1, -1.2, 0.6];
 let lastFitMode = 'cad';   // 'eye' = default human view; 'cad' = engineering views
+// Programs unioned to build the PROGRAM-INDEPENDENT framing envelope. Excludes
+// loss_of_power (a gravity fall, not commanded motion) and pole_grasp (randomised pole →
+// non-deterministic bounds). The included set bounds all normal articulation, so the
+// camera frames identically regardless of which program is selected.
+const ALL_PROGRAMS = ['planar_curl','lateral_sweep','wave','sweep','probe','full_range','noodling'];
 
 function fitView(ex, ey, ez, mode){
   // mode: 'eye' = default human view (eye anchored at ~5ft, looks at envelope centre,
@@ -1320,31 +1326,42 @@ function fitView(ex, ey, ez, mode){
   // given angle with all motion contained.
   const lengths = boneLengths(state.nPerZone, state.taperDeg, state.thetaMax, state.armLength);
   const nj = state.nPerZone.reduce((a,b)=>a+b,0)-1;
-  const frames = getMotionFrames(state.prog, state.nPerZone, state.thetaMax);
   const sep = state.armSep / 2;
-  const allPts = [];
-  const FF = (frames && frames.length) ? frames : [{thetas:Array(nj).fill(0), phis:Array(nj).fill(0)}];
-  for(const mf of FF){
-    const raw = fk3d(mf.thetas, mf.phis, lengths);
-    const a1 = applyMount(raw, state.mountAngle, state.mountH,  sep);
-    const a2 = applyMount(raw, state.mountAngle, state.mountH, -sep);
-    for(const p of a1) allPts.push(p);
-    for(const p of a2) allPts.push(p);
+  // PROGRAM-INDEPENDENT envelope: union of EVERY program's frames, so the camera frames
+  // identically no matter which program is selected. Cached and only recomputed when the
+  // geometry/mount that affects the envelope changes (unioning 7 programs × up to 144
+  // frames is expensive to run on every fit/resize).
+  const envSig = JSON.stringify([state.nPerZone,state.thetaMax,state.taperDeg,state.armLength,
+    state.zoneLengths,state.mountAngle,Math.round(state.mountH),Math.round(state.armSep)]);
+  if(!_envCache || _envCache.sig!==envSig){
+    let xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9,zmin=1e9,zmax=-1e9;
+    for(const pg of ALL_PROGRAMS){
+      let frames;
+      try{ frames = getMotionFrames(pg, state.nPerZone, state.thetaMax); }catch(e){ frames = null; }
+      const FF = (frames && frames.length) ? frames : [{thetas:Array(nj).fill(0), phis:Array(nj).fill(0)}];
+      for(const mf of FF){
+        const raw = fk3d(mf.thetas, mf.phis, lengths);
+        const a1 = applyMount(raw, state.mountAngle, state.mountH,  sep);
+        const a2 = applyMount(raw, state.mountAngle, state.mountH, -sep);
+        for(const a of [a1,a2]) for(const p of a){
+          if(p[0]<xmin)xmin=p[0]; if(p[0]>xmax)xmax=p[0];
+          if(p[1]<ymin)ymin=p[1]; if(p[1]>ymax)ymax=p[1];
+          if(p[2]<zmin)zmin=p[2]; if(p[2]>zmax)zmax=p[2];
+        }
+      }
+    }
+    _envCache = {sig:envSig, b:[xmin,xmax,ymin,ymax,zmin,zmax]};
   }
-
-  // World-space bounding box of the envelope.
-  let wxmin=1e9,wxmax=-1e9,wymin=1e9,wymax=-1e9,wzmin=1e9,wzmax=-1e9;
-  for(const p of allPts){
-    wxmin=Math.min(wxmin,p[0]); wxmax=Math.max(wxmax,p[0]);
-    wymin=Math.min(wymin,p[1]); wymax=Math.max(wymax,p[1]);
-    wzmin=Math.min(wzmin,p[2]); wzmax=Math.max(wzmax,p[2]);
-  }
+  const [wxmin,wxmax,wymin,wymax,wzmin,wzmax] = _envCache.b;
   const wcx=(wxmin+wxmax)/2, wcy=(wymin+wymax)/2, wcz=(wzmin+wzmax)/2;
   // Half-extent → make a CUBE box around the envelope (so aspectmode:'data' renders an
   // undistorted cube and the camera distance is predictable). Margin keeps the arm off
   // the very edge.
   const halfExtent = Math.max(wxmax-wxmin, wymax-wymin, wzmax-wzmin)/2;
-  const boxR = halfExtent * (1/FRAME_FILL);          // padded cube half-size
+  // TIGHT cube around the envelope (no FRAME_FILL padding here — the camera applies the
+  // fill margin in frameCameraFromBounds, so it isn't double-counted). +2% so points
+  // aren't exactly on the box face.
+  const boxR = halfExtent * 1.02;
   sceneBox = {
     xmin: wcx-boxR, xmax: wcx+boxR,
     ymin: wcy-boxR, ymax: wcy+boxR,
@@ -1355,38 +1372,52 @@ function fitView(ex, ey, ez, mode){
   // spans 2 units per side. The bounding SPHERE of the envelope has normalised radius
   // r_n = halfExtent / boxR = FRAME_FILL (≤1). Plotly's fixed 45° vertical FOV (and the
   // horizontal FOV from the real canvas aspect) set how far back the eye must sit.
-  const FOVY = Math.PI/4;
-  const plotEl = document.getElementById('plot');
-  const cw = (plotEl && plotEl.clientWidth)  || 1200;
-  const ch = (plotEl && plotEl.clientHeight) || 700;
-  const halfV = FOVY/2;
-  const halfH = Math.atan(Math.tan(halfV) * (cw/ch));
-  const limitHalf = Math.min(halfV, halfH);
-  const r_n = FRAME_FILL;                              // sphere radius in box-normalised units
-  // Eye distance in box-normalised units (centre→eye). Box spans ±1, so this is in the
-  // same units Plotly's camera.eye uses when aspectmode='data' with a cube.
-  const Dn = r_n / Math.sin(limitHalf);
-
-  if(mode === 'eye'){
-    // Front-3/4 human view: eye at ~5ft world height, standoff Dn in the horizontal
-    // plane, looking at the envelope centre (camera tilts up at the high arm).
-    const eyeZn = (EYE_LEVEL_MM - wcz) / boxR;         // eye level relative to centre, box units
-    const hlen = Math.hypot(dx, dy) || 1;
-    const hx = dx/hlen, hy = dy/hlen;
-    cam = {
-      eye:    { x: -hx*Dn, y: -hy*Dn, z: eyeZn },      // relative to centre (data aspect → centred)
-      center: { x: 0, y: 0, z: 0 },
-      up:     { x: 0, y: 0, z: 1 }
-    };
-  } else {
-    cam = {
-      eye:    { x: -dx*Dn, y: -dy*Dn, z: -dz*Dn },
-      center: { x: 0, y: 0, z: 0 },
-      up:     { x: 0, y: 0, z: 1 }
-    };
-    if(Math.abs(dz) > 0.9) cam.up = {x:0, y:1, z:0};
-  }
+  // Camera is set from Plotly's ACTUAL normalised bounds after render (see
+  // frameCameraFromBounds). Here we just stash the requested direction + mode and
+  // trigger a render; the bounds-based framing runs once Plotly has laid out the box.
+  cam = cam || {eye:{x:-1.4,y:0.7,z:0.3},center:{x:0.07,y:0,z:0.54},up:{x:0,y:0,z:1}};
   render();
+  frameCameraFromBounds();
+}
+
+// Set the camera from Plotly's live normalised data bounds — the ground-truth space the
+// gl3d camera actually uses (verified against glplot internals). center = bounds centre;
+// eye = center − dir·D, where D = R / (sin(limitHalf)·FRAME_FILL), R = normalised bounding
+// sphere radius, limitHalf = min(vertical, horizontal) half-FOV from Plotly's fixed 45°
+// fovy and the REAL canvas aspect. Works at any viewport because it reads live values.
+function frameCameraFromBounds(){
+  const el=document.getElementById('plot');
+  if(!el || !el._fullLayout || !el._fullLayout.scene || !el._fullLayout.scene._scene) return;
+  const glplot=el._fullLayout.scene._scene.glplot;
+  if(!glplot || !glplot.bounds) return;
+  const b=glplot.bounds;
+  const ctr=[(b[0][0]+b[1][0])/2,(b[0][1]+b[1][1])/2,(b[0][2]+b[1][2])/2];
+  let R=0;
+  for(const X of [0,1]) for(const Y of [0,1]) for(const Z of [0,1]){
+    R=Math.max(R, Math.hypot(b[X][0]-ctr[0], b[Y][1]-ctr[1], b[Z][2]-ctr[2]));
+  }
+  R=Math.max(R,1e-3);
+  const FOVY=glplot.fovy || Math.PI/4;
+  const cw=el.clientWidth||1200, ch=el.clientHeight||700;
+  const halfV=FOVY/2, halfH=Math.atan(Math.tan(halfV)*(cw/ch));
+  const limitHalf=Math.min(halfV,halfH);
+  const D=R/(Math.sin(limitHalf)*FRAME_FILL);
+  // Direction (front-3/4 etc.) in normalised space. aspectratio is 1:1:1 (isotropic), so
+  // a world-space direction maps directly to the same normalised direction.
+  const [dx,dy,dz]=lastFitDir;
+  let ex,ey,ez,up={x:0,y:0,z:1};
+  if(lastFitMode==='eye'){
+    // Human view: keep the eye near 5ft height by flattening the vertical component, but
+    // still frame the whole envelope. Put eye in the horizontal direction at distance D,
+    // at a height a touch below centre so the camera tilts up at the high arm.
+    const hlen=Math.hypot(dx,dy)||1, hx=dx/hlen, hy=dy/hlen;
+    ex=ctr[0]-hx*D; ey=ctr[1]-hy*D; ez=ctr[2]-Math.max(dz,0.12)*D*0.45;
+  } else {
+    ex=ctr[0]-dx*D; ey=ctr[1]-dy*D; ez=ctr[2]-dz*D;
+    if(Math.abs(dz)>0.9) up={x:0,y:1,z:0};
+  }
+  cam={eye:{x:ex,y:ey,z:ez},center:{x:ctr[0],y:ctr[1],z:ctr[2]},up};
+  try{ Plotly.relayout(el,{'scene.camera':cam}); }catch(e){}
 }
 
 // fitArmEnvelope: re-zoom to fit arm keeping current look direction.
