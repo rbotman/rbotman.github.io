@@ -57,7 +57,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 </head>
 <body>
 <div id="header">
-  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v58 · force model v1.0 · quick-wins: load-geo · seg ℓ_min · wider segs · square grid</span></h1>
+  <h1>Spirob Mundi <span style="font-size:9px;color:#556688;font-weight:400;letter-spacing:.03em;">v67 · FM v1.0</span></h1>
   <div class="stat w56"><span class="stat-label">curl</span><span class="stat-value" id="st-curl">0°</span></div>
   <div class="stat w80"><span class="stat-label">tip ht</span><span class="stat-value" id="st-tip">— mm</span></div>
   <div class="stat w96"><span class="stat-label">reach</span><span class="stat-value" id="st-reach">— mm</span></div>
@@ -147,6 +147,15 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
 
     <div class="section">
       <div class="section-title">what-if geometry</div>
+      <div class="row" style="margin:0 0 3px;gap:3px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:9px;color:#557799;min-width:30px;">eval</label>
+        <span class="vchip" id="vd-seize"   style="font-size:9px;padding:1px 5px;border-radius:3px;border:1px solid #334;cursor:default;">seize</span>
+        <span class="vchip" id="vd-bearing" style="font-size:9px;padding:1px 5px;border-radius:3px;border:1px solid #334;cursor:default;">bearing</span>
+        <span class="vchip" id="vd-bend"    style="font-size:9px;padding:1px 5px;border-radius:3px;border:1px solid #334;cursor:default;">bend</span>
+        <span class="vchip" id="vd-lip"     style="font-size:9px;padding:1px 5px;border-radius:3px;border:1px solid #334;cursor:default;">lip</span>
+        <span class="vchip" id="vd-print"   style="font-size:9px;padding:1px 5px;border-radius:3px;border:1px solid #334;cursor:default;">print</span>
+      </div>
+      <div class="row"><label style="font-size:8px;color:#5a8a5a;line-height:1.3" id="verdict-note">live candidate vs evaluate() — hover a chip for the value</label></div>
       <div class="row"><label>arm length</label>
         <input type="range" id="wi-arm" min="1000" max="5000" value="3000" step="100">
         <span class="val" id="wi-arm-val">3000 mm</span></div>
@@ -159,6 +168,10 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
       <div class="row"><label>Zone W length</label>
         <input type="range" id="wi-lc" min="100" max="1500" value="473" step="25">
         <span class="val" id="wi-lc-val">473 mm</span></div>
+      <div class="row"><label>W:T extra len</label>
+        <input type="range" id="wi-wtiface" min="0" max="80" value="15" step="5">
+        <span class="val" id="wi-wtiface-val">15 mm</span></div>
+      <div class="row"><label style="font-size:8px;color:#667;line-height:1.3">W:T interface ADDITIONAL combined length beyond an ordinary Wang segment (two dovetailed half-segments — sockets facing OUTWARD, rigid plates at the centre). 0 = seamless curl; &gt;0 adds to arm length + locally breaks the spiral (magenta stub). ⚠ stub is a marker; socket/cone/plate detail + rigid-centre not yet modelled.</label></div>
       <div class="row"><label>Zone B segs</label>
         <input type="range" id="wi-nb" min="3" max="40" value="6" step="1">
         <span class="val" id="wi-nb-val">6</span></div>
@@ -191,10 +204,23 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
         <span style="font-size:9px;color:#88aacc;" id="seg-w-val">W —</span>
         <span style="font-size:9px;color:#668899;" id="seg-floor-val">floor 19</span>
       </div>
+      <div class="row" style="margin-top:2px;gap:4px;flex-wrap:wrap;">
+        <label style="font-size:9px;color:#557799;min-width:70px;">self-gap</label>
+        <span style="font-size:9px;font-weight:600;" id="selfgap-val">—</span>
+        <span style="font-size:8px;color:#668899;">min loop-to-loop gap over the curl (B skin + T/W sleeve) · ≤0 = collision</span>
+      </div>
+      <div class="row" style="margin-top:2px;gap:4px;flex-wrap:wrap;">
+        <label style="font-size:9px;color:#557799;min-width:70px;">grasp Ø</label>
+        <span style="font-size:9px;font-weight:600;color:#88aacc;" id="grasp-val">—</span>
+        <span style="font-size:8px;color:#668899;">graspable object Ø at full curl (T/W) · tip = smallest, T:W end = largest</span>
+      </div>
       <div class="divider"></div>
-      <div class="btn-grid"><button class="btn" id="load-c1">C1 candidate</button><button class="btn" id="load-c2">C2 candidate</button><button class="btn" id="strong-zones">Strong Zones</button><button class="btn" id="wang-btn">Wang Spiral</button><button class="btn" id="save-geo">Save Geo</button><button class="btn" id="load-geo">Load Geo</button></div>
+      <div class="btn-grid"><button class="btn" id="load-c1">C1 candidate</button><button class="btn" id="load-c2">C2 candidate</button><button class="btn" id="strong-zones">Strong Zones</button><button class="btn" id="wang-btn">Wang Spiral</button><button class="btn" id="sweep-btn">Sweep</button><button class="btn" id="save-geo">Save Geo</button><button class="btn" id="load-geo">Load Geo</button></div>
       <input type="file" id="load-geo-file" accept=".json,application/json" style="display:none">
-      <div class="divider"></div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Friction</div>
       <div class="row"><label>friction μ</label>
         <input type="range" id="wi-mu" min="0.01" max="0.30" value="0.04" step="0.005">
         <span class="val" id="wi-mu-val">0.040</span></div>
@@ -207,9 +233,18 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
         <input type="range" id="wi-ztball" min="0" max="40" value="0" step="1">
         <span class="val" id="wi-ztball-val">auto</span></div>
       <div class="row"><label style="font-size:8px;color:#667;line-height:1.3">0 = fill-cap (ball tracks T:W Ø). Lock a smaller ball to raise seize headroom (μ_crit ∝ r_line/r_ball).</label></div>
+      <div class="row" style="margin-top:2px;gap:5px;flex-wrap:wrap;align-items:center;">
+        <label style="font-size:9px;color:#557799;min-width:46px;">iglide</label>
+        <button class="btn" id="iglide-grade" style="font-size:9px">I180</button>
+        <button class="btn" id="pipe-bonded" style="font-size:9px">pipe: slip-fit</button>
+        <span style="font-size:8px;color:#667;line-height:1.3">chosen params the eval checks: bearing grade (J260 = more headroom but NOT AMS-dryable → bearing reds) · bonded pipe routes the lip moment to shear (lip → ~3-4 mm, needs a bonding material).</span></div>
+      <div class="row"><label>ZB lip wall</label>
+        <input type="range" id="wi-lipwall" min="3" max="14" value="8" step="0.5">
+        <span class="val" id="wi-lipwall-val">8.0 mm</span></div>
+      <div class="row"><label style="font-size:8px;color:#667;line-height:1.3">endcap LIP wall (the base-size driver; distinct from the socket-hoop wall in the print panel). Drives the lip stress+deflection check.</label></div>
       <div class="row"><label>ZT seize FS</label>
         <span class="val" id="seize-fs-val" style="font-weight:600">— → —</span>
-        <span style="font-size:8px;color:#667">clean→storm · ZT-distal · angle-independent · FS_MIN 1.5</span></div>
+        <span style="font-size:8px;color:#667">clean→storm · binding ZT joint · re-anchored N (= eval strip) · FS_MIN 1.5</span></div>
       <div class="row"><label>ZT bearing SF</label>
         <span class="val" id="bear-sf-val" style="font-weight:600">—</span>
         <span style="font-size:8px;color:#667">iglide compression · T:B joint (binding) · storm N · 65.6°C[80°C]</span></div>
@@ -222,7 +257,7 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
         <span class="val" id="d-val" style="font-weight:600">— → —</span>
         <span style="font-size:8px;color:#667">F_CUM²−1 · full curl · clean→storm</span></div>
       <div class="row" style="margin-top:2px;gap:5px;flex-wrap:wrap">
-        <button class="btn" id="ptfe-jacket" style="font-size:9px">PTFE jacket (B+T): OFF</button>
+        <button class="btn active" id="ptfe-jacket" style="font-size:9px">PTFE jacket (B+T): ON</button>
         <span style="font-size:8px;color:#667;line-height:1.3">seal the control lines over Zone B+T → their capstan μ stays clean as dust rises (cuts drive demand + deadband D). Does NOT touch Zone-W transit or the ZT ball-socket seize μ. (D1 v0.2; supersedes the retired Bowden-W lever.)</span></div>
       <div class="divider"></div>
       <div class="row"><label>spine seat</label>
@@ -278,8 +313,10 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
       <div class="toggle-row" data-overlay="safety"><span class="toggle-label">safety perimeter (3m)</span><span class="chip on">on</span></div>
       <div class="toggle-row" data-overlay="lop"><span class="toggle-label">loss-of-power ghost</span><span class="chip on">on</span></div>
       <div class="toggle-row" data-overlay="arm2"><span class="toggle-label">second arm (mirrored)</span><span class="chip">off</span></div>
-      <div class="toggle-row" data-overlay="fairlead"><span class="toggle-label">fairlead envelope</span><span class="chip on">on</span></div>
-      <div class="toggle-row" data-overlay="skin"><span class="toggle-label">outer skin</span><span class="chip on">on</span></div>
+      <div class="toggle-row" data-overlay="fairlead"><span class="toggle-label">fairlead envelope (inboard, r_line — WIP)</span><span class="chip">off</span></div>
+      <div class="toggle-row" data-overlay="segod"><span class="toggle-label">Segment OD sleeve (Wang T/W; collision/tightness)</span><span class="chip on">on</span></div>
+      <div class="toggle-row" data-overlay="collide"><span class="toggle-label">self-collision (closest pair)</span><span class="chip on">on</span></div>
+      <div class="toggle-row" data-overlay="skin"><span class="toggle-label">outer skin (Zone B, ornamental)</span><span class="chip on">on</span></div>
       <div class="toggle-row" data-overlay="triad"><span class="toggle-label">origin axes</span><span class="chip on">on</span></div>
       <div class="row" style="margin-top:4px">
         <label>skin base radius</label>
@@ -343,6 +380,16 @@ input[type=range]{flex:1;accent-color:#4a90d9;cursor:pointer}
     <button class="btn" id="wang-apply-zt" style="font-size:9px;">Apply ZT</button>
     <button class="btn" id="wang-apply-both" style="font-size:9px;background:#152515;border-color:#3a6a3a;color:#b0e0a0;">Apply Both</button>
   </div>
+</div>
+
+<div id="sweep-modal" style="display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#0c0c20;border:1px solid #3a4a6a;border-radius:4px;padding:10px 12px;z-index:200;width:580px;box-shadow:0 8px 40px rgba(0,0,0,.6);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+    <span style="font-size:11px;font-weight:600;color:#a8d8ff;">Sweep — arm length × spiral tightness</span>
+    <button id="sweep-close" style="background:none;border:1px solid #334466;color:#8899aa;border-radius:2px;font-size:9px;padding:1px 7px;cursor:pointer;">✕</button>
+  </div>
+  <div id="sweep-metric-btns" style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:6px;"></div>
+  <div id="sweep-plot" style="width:100%;height:340px;"></div>
+  <div style="font-size:8px;color:#667;margin-top:4px;line-height:1.3">RAW margins — no pass/fail baked in; read the field, draw your own line · full-curl pose · candidate = live chosen params · zone proportions + seg counts held (arm scales zone lengths, tightness scales Δθ)</div>
 </div>
 
 <script>
@@ -507,6 +554,89 @@ function socketPrintSF(m,T,walls,wall,infill){
   return allowableStress(m,T)/(hoop/sectionEff(walls,wall,infill));
 }
 
+// ── LIVE EVAL kernel (Session B) ──────────────────────────────────────────────
+// Self-contained PURE port of hardware/analysis/candidate_loads.evaluate(): given a candidate
+// object (the executable half of a ledger record), CHECK its chosen physical params against the
+// force model → per-check {ok} + binding set. Re-anchored N (CORE_PRELOAD + weight pendant + tip→
+// joint capstan), NOT the legacy spineSeat-only N. tools/force_contract.js extracts this //<<EVAL>>
+// region and asserts EVAL.verdict() == Python evaluate() for C1/C2 + failure cases (anti-divergence
+// guard — the single source of TRUTH is the Python; this is a contract-pinned mirror). Own data
+// tables (mirrors candidate_loads/joint_iglide_bearing/zb_lip_load/materials); duplication is
+// intentional + guarded. ⚠ legacy-N consumers still live (ztSeizeFS standalone, ztNatTB ball-window,
+// socketPrintSF bearing N) — flagged for B.2 retirement onto this kernel.
+//<<EVAL>>
+const EVAL = (function(){
+  const Rnd=(x,n)=>{const f=Math.pow(10,n);return Math.round(x*f)/f;};
+  const PRE=12.5, TIP_CMD=40, CORE_PRELOAD=30, FS_MIN=1.5, DESIGN_MU=0.30;
+  const MU_CAP={clean:0.04,dusty:0.10}, MU_SOCKET={clean:0.12,dusty:0.22};
+  const CAPS={BOSS:4,BORE_R:3,INTER:2,EDGE:1.5};
+  const IGLIDE_RATING={I180:30,J260:40}, IGLIDE_DERATE={20:1.0,40:0.80,60:0.62,80:0.50};
+  const IGLIDE_AMS_OK={I180:true,J260:false};
+  const CHAMFER_RELIEF=7.65, ROPE_RMIN_PER_DIA=20, LINER_ALLOW=1.5, DISH_ALPHA=45;
+  const W_EFF_C=2.5, DEFL_TOL=0.20, SF_STRESS_TARGET=3.0, LIP_TEMP=65.6, AMS_DRY_CEILING=70;
+  const STRENGTH={
+    'PA12-CF':{yld:70,E:6000,kd:[[20,1],[50,.90],[65.6,.80],[80,.45]],dry_C:70,bonds:false},
+    'PETG-CF':{yld:50,E:4000,kd:[[20,1],[50,.78],[65.6,.54],[80,.30]],dry_C:65,bonds:true},
+    'PA12':   {yld:48,E:1700,kd:[[20,1],[50,.85],[65.6,.70],[80,.40]],dry_C:70,bonds:false},
+    'PC-CF':  {yld:90,E:6500,kd:[[20,1],[50,.95],[65.6,.88],[80,.75]],dry_C:100,bonds:false},
+    'PETG':   {yld:45,E:2100,kd:[[20,1],[50,.75],[65.6,.50],[80,.25]],dry_C:65,bonds:true},
+  };
+  function yieldAt(m,T){const k=STRENGTH[m].kd,y=STRENGTH[m].yld;
+    if(T<=k[0][0])return y*k[0][1]; if(T>=k[k.length-1][0])return y*k[k.length-1][1];
+    for(let i=1;i<k.length;i++)if(T<=k[i][0]){const a=k[i-1],b=k[i];return y*(a[1]+(T-a[0])/(b[0]-a[0])*(b[1]-a[1]));}}
+  function amsOK(m){return STRENGTH[m].dry_C<=AMS_DRY_CEILING;}
+  function capFill(od){return Math.max(2,od-2*(CAPS.BOSS+CAPS.BORE_R+CAPS.INTER+CAPS.BORE_R+CAPS.EDGE));}
+  function rLine(od){return od/2-(CAPS.EDGE+CAPS.BORE_R);}
+  function iglideDerate(T){const a=Object.keys(IGLIDE_DERATE).map(Number).sort((x,y)=>x-y);
+    if(T<=a[0])return IGLIDE_DERATE[a[0]]; if(T>=a[a.length-1])return IGLIDE_DERATE[a[a.length-1]];
+    for(let i=1;i<a.length;i++)if(T<=a[i]){const t0=a[i-1],t1=a[i];return IGLIDE_DERATE[t0]+(T-t0)/(t1-t0)*(IGLIDE_DERATE[t1]-IGLIDE_DERATE[t0]);}}
+  function pLimit(g,T){const r=IGLIDE_RATING[g];return r==null?null:r*iglideDerate(T);}
+  function projArea(ball,tendon){const rRim=(ball/2)*Math.sin(DISH_ALPHA*Math.PI/180),rBore=(tendon+LINER_ALLOW)/2;
+    return Math.PI*(rRim*rRim-rBore*rBore);}
+  function bendCheck(ball,thetaDeg,tendon){const th=thetaDeg*Math.PI/180;
+    const R_eff=ball/th+CHAMFER_RELIEF, Rmin=ROPE_RMIN_PER_DIA*tendon; return {R_eff,Rmin,ok:R_eff>=Rmin};}
+  function wEff(boneOd,wall){const rMean=boneOd/2+wall/2;return W_EFF_C*Math.sqrt(rMean*wall);}
+  function qualifyLip(F,depth,wall,mat,boneOd){const T=LIP_TEMP,w=wEff(boneOd,wall);
+    const sigma=6*F*depth/(w*wall*wall);
+    const E=STRENGTH[mat].E*(yieldAt(mat,T)/STRENGTH[mat].yld);
+    const delta=4*F*Math.pow(depth,3)/(E*w*Math.pow(wall,3));
+    const yld=yieldAt(mat,T), sf=yld/sigma;
+    return {SF_stress:sf,delta_mm:delta,comfortable:sf>=SF_STRESS_TARGET&&delta<=DEFL_TOL};}
+  function jointsTipToBase(c){const nB=c.n[0],nT=c.n[1],nW=c.n[2],tB=c.theta[0],tT=c.theta[1],tW=c.theta[2],d=c.diam,out=[];let s=0;
+    for(let j=0;j<nW;j++){s++;const t=nW>1?j/(nW-1):0;out.push({s,zone:'W',theta:tW,od:d.tip*Math.pow(d.WT/d.tip,t),score:false});}
+    for(let j=0;j<nT;j++){s++;const t=nT>1?j/(nT-1):0;out.push({s,zone:'T',theta:tT,od:d.WT*Math.pow(d.TB/d.WT,t),score:true});}
+    for(let j=0;j<nB;j++){s++;const t=nB>1?j/(nB-1):0;out.push({s,zone:'B',theta:tB,od:d.TB*Math.pow(d.base/d.TB,t),score:false});}
+    return out;}
+  function perJointLoads(c,regime){const js=jointsTipToBase(c),n=js.length,muCap=MU_CAP[regime],muS=MU_SOCKET[regime];
+    let wrap=0;const rows=[];
+    for(const j of js){const F=Math.exp(muCap*wrap);wrap+=j.theta*Math.PI/180;
+      const Tp=PRE*F,Ta=TIP_CMD*F,core=CORE_PRELOAD+(c.weight_N/n)*j.s,N=core+Ta+2*Tp;
+      const row=Object.assign({},j,{F,N,core});
+      if(j.score){const rb=(c.zt_ball_mm?c.zt_ball_mm:capFill(j.od))/2,rl=rLine(j.od),mc=((Ta-Tp)*rl)/(N*rb);
+        row.r_ball=rb;row.mu_crit=mc;row.FS=mc/muS;row.FS_design=mc/DESIGN_MU;}
+      rows.push(row);}
+    return rows;}
+  function verdict(c,regime,tempExc){regime=regime||'dusty';tempExc=tempExc||80;
+    const rows=perJointLoads(c,regime),scored=rows.filter(r=>r.score);
+    const bs=scored.reduce((m,r)=>r.FS<m.FS?r:m);
+    const seize={FS:Rnd(bs.FS,2),FS_design_mu:Rnd(bs.FS_design,2),ok:bs.FS>=FS_MIN,where:`${bs.zone}-joint OD${Math.round(bs.od)}`};
+    const N_TB=Math.max.apply(null,scored.map(r=>r.N));
+    const A=projArea(c.zt_ball_mm,c.zt_tendon_mm),lim=pLimit(c.iglide,tempExc),sfB=lim?lim/(N_TB/A):null,dry=IGLIDE_AMS_OK[c.iglide];
+    const bearing={SF:sfB?Rnd(sfB,2):null,N_TB:Math.round(N_TB),grade:c.iglide,grade_dryable:dry,
+      ok:!!lim&&sfB>=1.5&&dry,comfortable:!!lim&&sfB>=2.0&&dry};
+    const bc=bendCheck(c.zt_ball_mm,c.theta[1],c.zt_tendon_mm),bend={R_eff:Rnd(bc.R_eff,1),Rmin:Rnd(bc.Rmin,1),ok:bc.ok};
+    const depth=c.socket_depth,boneOd=depth*2;let lip;
+    if(c.bonded){lip=STRENGTH[c.material].bonds?{ok:true,note:'bonded'}:{ok:false,note:'material does NOT bond to PVC'};}
+    else{const q=qualifyLip(c.grav_lip_N,depth,c.cap_wall_mm,c.material,boneOd);
+      lip={SF_stress:Rnd(q.SF_stress,2),delta_mm:Rnd(q.delta_mm,3),ok:q.comfortable};}
+    const pr={material:c.material,ams_dryable:amsOK(c.material),ok:amsOK(c.material)};
+    const verdicts={seize,bearing,bend,lip,print:pr};
+    const binding=Object.keys(verdicts).filter(k=>verdicts[k].ok===false);
+    return {verdicts,binding};}
+  return {verdict, perJointLoads, jointsTipToBase};
+})();
+//<<EVAL-END>>
+
 let state = {
   prog:'planar_curl', frame:0, playing:false, looping:true,
   fps:18, speed:0.5, frameAccum:0, loopCount:0,
@@ -519,13 +649,16 @@ let state = {
   skinBaseR: ENV.skin_base_r,
   mu: ENV.mu_clean,  // current friction coefficient
   spineSeat: (typeof ENV.spine_seat_n==='number')?ENV.spine_seat_n:30.0,  // central-tendon at-rest seating preload (N)
-  overlays:{ground:true,rv:true,safety:true,lop:true,arm2:false,fairlead:true,skin:true,triad:true},
+  overlays:{ground:true,rv:true,safety:true,lop:true,arm2:false,fairlead:false,skin:true,triad:true,segod:true,collide:true},
   lopStartThetas:null, lopStartPhis:null,
   strongZones:false,
   ztBallDia:0,     // P1: ZT-distal ball Ø (mm); 0 = cap-fill (ball tracks T:W OD)
-  ptfeJacket:false,  // D1 v0.2: PTFE control-line jacket over Zone B+T (provisioned, not fitted) — caps B+T capstan μ at clean
+  ptfeJacket:true,  // D1 v0.2: PTFE control-line jacket over Zone B+T (provisioned) — caps B+T capstan μ at clean. ON by default.
   forceView:'engage',  // arm coloring: 'engage' (theta/stall) | 'tension' (per-joint active-line N) | 'loss' (capstan authority lost %)
   printMat:'PA12-CF', printWalls:5, printInfill:0.40, capWall:4.0, printTemp:65.6,  // filament + slicer qualification
+  iglide:'I180', bonded:false,   // chosen physical params for the live eval (Candidate fields: iglide grade / pipe bonded)
+  lipWall:8.0,   // Zone-B endcap LIP wall (≠ socket wall capWall); Candidate default 8 mm (lip drives base size)
+  wtIfaceLen:15,   // W:T interface EXCESS length (mm) — additional combined length beyond an ordinary Wang segment; 0 = seamless curl
 };
 
 // ── Math ──────────────────────────────────────────────────────────────────────
@@ -687,19 +820,76 @@ function computeInterfaceDia(){
   const dmin=tip/(Math.exp(Math.PI*bFromPhi(state.taperDeg[2]))-1);
   return{tb,tw,tip,dmin};
 }
+// ── Live candidate (the executable ledger record, built from state) for EVAL.verdict() ──
+let _gravLipCache={sig:null,val:22.0};
+function liveGravLipN(){
+  const sig=JSON.stringify([state.nPerZone,state.thetaMax,state.taperDeg,state.armLength,
+    state.zoneLengths,state.mountAngle,state.mountH,state.armSep,state.prog,state.skinBaseR]);
+  if(_gravLipCache.sig!==sig){
+    let v=22.0;
+    try{const gm=gravMomentEnvelopePeak(),nB=state.nPerZone[0];
+      if(gm&&nB>0&&gm.length>=nB) v=gm[nB-1]/16.7;}catch(e){}   // ZB-distal moment / socket_depth(1")
+    _gravLipCache={sig,val:v};
+  }
+  return _gravLipCache.val;
+}
+function liveCandidate(d){
+  d=d||computeInterfaceDia();
+  let weight=33.0; try{weight=segWeightsN().reduce((a,b)=>a+b,0);}catch(e){}
+  // resolve the CHOSEN ball: auto(0) → cap-fill at the T:W joint (the Explorer's resolve convention) so
+  // bend/bearing get a real ball, not 0. evaluate() always receives a concrete ball (never 0).
+  const ball = state.ztBallDia>0 ? state.ztBallDia : capFillBallDia(d.tw);
+  return {name:'live', n:state.nPerZone.slice(), theta:state.thetaMax.slice(),
+    diam:{tip:d.tip, WT:d.tw, TB:d.tb, base:state.skinBaseR*2}, weight_N:weight,
+    zt_ball_mm:ball, zt_tendon_mm:ZT_TENDON_MM, cap_wall_mm:state.lipWall,   // lip wall ≠ socket wall (state.capWall)
+    material:state.printMat, iglide:state.iglide, bonded:state.bonded,
+    socket_depth:16.7, grav_lip_N:liveGravLipN()};
+}
+// ── Verdict strip (Session B): 5 chips, continuous, binding → red. Mirrors evaluate()'s checks. ──
+function updateVerdictStrip(cand){
+  if(typeof EVAL==='undefined') return;
+  let v; try{ v=EVAL.verdict(cand); }catch(e){ return; }
+  const g=id=>document.getElementById(id);
+  const fmt={
+    seize:x=>`seize FS ${x.FS} (storm) · design-µ ${x.FS_design_mu} · ${x.where} · ok≥1.5`,
+    bearing:x=>`bearing SF ${x.SF} · N_TB ${x.N_TB} N · ${x.grade}${x.grade_dryable?'':' NOT AMS-dryable'} · ok≥1.5 comfy≥2`,
+    bend:x=>`bend R_eff ${x.R_eff} ≥ Rmin ${x.Rmin} mm`,
+    lip:x=>x.SF_stress!=null?`lip SF ${x.SF_stress} · δ ${x.delta_mm} mm`:(x.ok?'lip: bonded (shear path)':'lip: invalid bond'),
+    print:x=>`print ${x.material} · AMS ${x.ams_dryable?'dryable':'OUT'}`,
+  };
+  const bind=new Set(v.binding);
+  [['vd-seize','seize'],['vd-bearing','bearing'],['vd-bend','bend'],['vd-lip','lip'],['vd-print','print']].forEach(([id,k])=>{
+    const el=g(id); if(!el) return;
+    const ck=v.verdicts[k];
+    const marginal = ck.ok && ck.comfortable===false;   // bearing/lip: passes ok but not comfortable
+    let col,bg;
+    if(ck.ok===false){col='#e06666';bg='rgba(224,102,102,.16)';}
+    else if(marginal){col='#d0a030';bg='rgba(208,160,48,.13)';}
+    else{col='#5fbf5f';bg='rgba(95,191,95,.10)';}
+    el.style.color=col; el.style.borderColor=col; el.style.background=bg;
+    el.style.fontWeight=bind.has(k)?'700':'500';
+    el.title=fmt[k](ck);
+  });
+  const note=g('verdict-note');
+  if(note){ note.textContent = v.binding.length ? ('BINDING: '+v.binding.join(' · '))
+            : 'all checks clear — storm µ + design checks (re-anchored N)';
+    note.style.color = v.binding.length ? '#e06666' : '#5a8a5a'; }
+}
 function updateDiamDisplay(){
   const d=computeInterfaceDia();
   const f=v=>v>0?v.toFixed(0)+'mm':'—';
   const s=id=>document.getElementById(id);
+  const _cand=liveCandidate(d);
   if(s('dia-tb-val'))  s('dia-tb-val').textContent ='B:T '+f(d.tb);
   if(s('dia-tw-val'))  s('dia-tw-val').textContent ='T:W '+f(d.tw);
   if(s('dia-tip-val')) s('dia-tip-val').textContent='tip '+f(d.tip);
   if(s('dia-dmin-val'))s('dia-dmin-val').textContent='d_min '+f(d.dmin);
-  // Live seize as a clean→storm BRACKET at ZT-distal (live T:W Ø, independent ball). ANGLE-INDEPENDENT.
+  // Live seize as a clean→storm BRACKET — now on the RE-ANCHORED candidate N (binding Zone-T joint),
+  // unified with EVAL.verdict() (Session B). Supersedes the legacy spineSeat-only ztSeizeFS bracket.
   const se=s('seize-fs-val');
   if(se){
-    const fsClean=ztSeizeFS(d.tw, state.ztBallDia, MU_SEIZE_CLEAN, MU_CAP_CLEAN);
-    const fsStorm=ztSeizeFS(d.tw, state.ztBallDia, MU_SEIZE_STORM, MU_CAP_STORM);
+    let fsClean=NaN,fsStorm=NaN;
+    try{ fsClean=EVAL.verdict(_cand,'clean').verdicts.seize.FS; fsStorm=EVAL.verdict(_cand,'dusty').verdicts.seize.FS; }catch(e){}
     se.textContent=(isFinite(fsClean)?fsClean.toFixed(2):'—')+' → '+(isFinite(fsStorm)?fsStorm.toFixed(2):'—');
     se.style.color = fsStorm>=1.5?'#5fbf5f':(fsStorm>=1.0?'#d0a030':'#e06666');  // color by storm vs FS_MIN 1.5
   }
@@ -745,6 +935,18 @@ function updateDiamDisplay(){
     el.style.color=(v>0&&v<PRINT_FLOOR_MM)?'#e06666':'#88aacc';   // red below the print floor
   });
   if(typeof updatePrintQual==='function') updatePrintQual();   // socket SF rides the live candidate N
+  updateVerdictStrip(_cand);   // Session B: continuous 5-check verdict strip (binding → red)
+  // S2 self-collision: min loop-to-loop T/W sleeve gap over the curl envelope (≤0 = collision). Cached by geom sig.
+  const sg=s('selfgap-val');
+  if(sg){ const ce=collisionEnvelope();
+    if(ce&&isFinite(ce.gap)){ sg.textContent=Math.round(ce.gap)+' mm  (segs '+ce.i+'↔'+ce.j+' @f'+ce.frame+')';
+      sg.style.color = ce.gap<=0?'#e06666':(ce.gap<20?'#d0a030':'#5fbf5f'); }
+    else { sg.textContent='—'; sg.style.color=''; }
+  }
+  const gr=s('grasp-val');
+  if(gr){ const gv=graspRange();
+    gr.textContent = gv ? (Math.round(gv.min)+' – '+Math.round(gv.max)+' mm') : 'none (curl too tight / no wrap)';
+  }
 }
 function wangRebuild(){
   const ZD=ZONE_DIAM;
@@ -774,7 +976,18 @@ function wangApplyZone(zi, cand){
   if(state.strongZones) applyStrongZones();
   render();
 }
+// W:T interface = a duty-fixed axial length straddling the T:W boundary SYMMETRICALLY (two dovetailed
+// plates, a socket facing each adjacent zone; the dovetail center does not articulate). Split half onto
+// the last Zone-T bone and half onto the first Zone-W bone, so the interface is centred on the boundary
+// pivot. NOT scaled into a zone's β-budget — extra real length the spiral must cross. wIdx = first W bone.
+function addIface(arr,wIdx,wt){
+  if(!wt) return;
+  if(wIdx-1>=0 && wIdx-1<arr.length) arr[wIdx-1]+=wt/2;   // T-side plate
+  if(wIdx<arr.length) arr[wIdx]+=wt/2;                    // W-side plate
+}
 function boneLengths(npz,tdeg,tmax,L,zoneLens){
+  const wt=(typeof state!=='undefined'&&state.wtIfaceLen)?state.wtIfaceLen:0;
+  const wIdx=npz[0]+npz[1];
   if(zoneLens){
     // Per-zone scaling: each zone sums to its target length independently.
     const out=[];
@@ -785,6 +998,7 @@ function boneLengths(npz,tdeg,tmax,L,zoneLens){
       const sc=zoneLens[zi]/rel.reduce((a,b)=>a+b,0);
       rel.forEach(r=>out.push(r*sc));
     }
+    addIface(out,wIdx,wt);
     return out;
   }
   const rel=[];let l=1;
@@ -792,7 +1006,9 @@ function boneLengths(npz,tdeg,tmax,L,zoneLens){
     const b=bFromPhi(tdeg[zi]),beta=Math.exp(-b*tmax[zi]*Math.PI/180);
     for(let j=0;j<npz[zi];j++){rel.push(l);l*=beta;}
   }
-  const sc=L/rel.reduce((a,b)=>a+b,0);return rel.map(r=>r*sc);
+  const sc=L/rel.reduce((a,b)=>a+b,0);const scaled=rel.map(r=>r*sc);
+  addIface(scaled,wIdx,wt);
+  return scaled;
 }
 function rod(v,k,a){
   const c=Math.cos(a),s=Math.sin(a),d=v[0]*k[0]+v[1]*k[1]+v[2]*k[2];
@@ -1553,6 +1769,209 @@ function skinTraces(pts,opacity){
   return tubeTrace(skinPts,radii,activePalette.skin,opacity*0.28,10);
 }
 
+// Segment OD SLEEVE: the TRUE outer surface of Zones T+W (the tight sleeve conforms to it) — the thing
+// that collides and sets visual spiral tightness. Tube at od/2 per node, OD from the WANG STRUCTURAL
+// diameters (ZONE_DIAM: TB→WT→Wtip), NOT the skin-base slider. Covers T and W only (stops at the B:T
+// boundary for now); Zone B is the ornamental skin. The fairlead envelope is INBOARD of this and must
+// NOT be used to judge collisions.
+function segEnvTraces(pts){
+  if(!state.overlays.segod) return [];
+  const npz=state.nPerZone, nB=npz[0], nT=npz[1], nW=npz[2];
+  const ZD=ZONE_DIAM;
+  const sub=pts.slice(nB);   // nodes from the B:T boundary (index nB) to the tip
+  if(sub.length<2) return [];
+  const bounds=[[ZD.TB,ZD.WT],[ZD.WT,ZD.Wtip]];   // [T, W] proximal→distal structural OD (Wang)
+  const counts=[nT,nW];
+  const radii=new Array(sub.length).fill(Math.max(1,ZD.Wtip/2));
+  let node=0;
+  for(let z=0;z<2;z++){
+    const d0=bounds[z][0], d1=bounds[z][1], nn=counts[z];
+    for(let b=0;b<=nn;b++){
+      const t = nn>0 ? b/nn : 0;
+      const idx=node+b;
+      if(idx<radii.length) radii[idx]=Math.max(1, d0*Math.pow(d1/d0,t)/2);
+    }
+    node += nn;
+  }
+  return tubeTrace(sub,radii,'#9fd0ff',0.16,14);
+}
+
+// ── Self-collision (S2 loop-to-loop spiral tightness) ─────────────────────────────────────────
+// Each T/W segment = a capsule (bone centreline + sleeve radius from ZONE_DIAM). Gap between two
+// segments = segment-segment distance − (r_i+r_j); ≤0 = the sleeves overlap = self-collision (the
+// over-spirality limit). Skip ±2 along-chain neighbours (adjacent by design). OBSERVABLE only — reports
+// the min gap; constrains nothing. Evaluated over the curl ENVELOPE (min across all motion frames).
+function _ssDist(p1,q1,p2,q2){
+  const sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]], dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2], cl=x=>x<0?0:x>1?1:x;
+  const d1=sub(q1,p1), d2=sub(q2,p2), r=sub(p1,p2);
+  const a=dot(d1,d1), e=dot(d2,d2), f=dot(d2,r), EPS=1e-9; let s,t;
+  if(a<=EPS&&e<=EPS){s=0;t=0;}
+  else if(a<=EPS){s=0;t=cl(f/e);}
+  else{ const c=dot(d1,r);
+    if(e<=EPS){t=0;s=cl(-c/a);}
+    else{ const b=dot(d1,d2), denom=a*e-b*b;
+      s = denom>EPS ? cl((b*f-c*e)/denom) : 0; t=(b*s+f)/e;
+      if(t<0){t=0;s=cl(-c/a);} else if(t>1){t=1;s=cl((b-c)/a);} } }
+  const c1=[p1[0]+d1[0]*s,p1[1]+d1[1]*s,p1[2]+d1[2]*s], c2=[p2[0]+d2[0]*t,p2[1]+d2[1]*t,p2[2]+d2[2]*t];
+  const dx=c1[0]-c2[0],dy=c1[1]-c2[1],dz=c1[2]-c2[2];
+  return {dist:Math.sqrt(dx*dx+dy*dy+dz*dz), c1, c2};
+}
+// Outer radius at a global node: Zone B = skin envelope (skinBaseR→TB), Zone T/W = sleeve (ZONE_DIAM).
+function _segR(gNode){
+  const npz=state.nPerZone, nB=npz[0], nT=npz[1], nW=npz[2], ZD=ZONE_DIAM;
+  if(gNode<nB){ const t=nB>0?gNode/nB:0; const base=state.skinBaseR*2; return base*Math.pow(ZD.TB/base,t)/2; }
+  const li=gNode-nB;
+  if(li<=nT){ const t=nT>0?li/nT:0; return ZD.TB*Math.pow(ZD.WT/ZD.TB,t)/2; }
+  const t=nW>0?(li-nT)/nW:0; return ZD.WT*Math.pow(ZD.Wtip/ZD.WT,t)/2;
+}
+function selfCollision(pts){
+  const npz=state.nPerZone, nB=npz[0], nT=npz[1], nW=npz[2];
+  const last=nB+nT+nW-1;                   // all bones (B + T + W)
+  let best={gap:Infinity,i:-1,j:-1,c1:null,c2:null};
+  for(let i=0;i<=last;i++){
+    if(i+1>=pts.length) break;
+    const ri=(_segR(i)+_segR(i+1))/2;
+    for(let j=i+3;j<=last;j++){            // skip ±2 chain neighbours
+      if(j+1>=pts.length) break;
+      if(i<nB && j<nB) continue;           // skip Zone-B-internal pairs (skin is one continuous cone)
+      const rj=(_segR(j)+_segR(j+1))/2;
+      const d=_ssDist(pts[i],pts[i+1],pts[j],pts[j+1]);
+      const gap=d.dist-(ri+rj);
+      if(gap<best.gap) best={gap,i,j,c1:d.c1,c2:d.c2};
+    }
+  }
+  return best;
+}
+let _collCache={sig:null,val:null};
+function collisionEnvelope(){
+  const sig=JSON.stringify([state.nPerZone,state.taperDeg,state.thetaMax,state.armLength,
+    state.zoneLengths,state.wtIfaceLen,state.prog,state.mountAngle,state.mountH,state.armSep]);
+  if(_collCache.sig===sig) return _collCache.val;
+  const sep=state.armSep/2;
+  const lengths=boneLengths(state.nPerZone,state.taperDeg,state.thetaMax,state.armLength,state.zoneLengths);
+  let frames; try{ frames=getMotionFrames(state.prog,state.nPerZone,state.thetaMax); }catch(e){ frames=null; }
+  let best={gap:Infinity,frame:-1,i:-1,j:-1};
+  if(frames&&frames.length){
+    frames.forEach((mf,fi)=>{
+      const pts=applyMount(fk3d(mf.thetas,mf.phis,lengths),state.mountAngle,state.mountH,sep);
+      const c=selfCollision(pts);
+      if(c.gap<best.gap) best={gap:c.gap,frame:fi,i:c.i,j:c.j};
+    });
+  }
+  _collCache={sig,val:best};
+  return best;
+}
+function collisionTraces(pts){
+  if(!state.overlays.collide) return [];
+  const c=selfCollision(pts);
+  if(!c.c1||!isFinite(c.gap)) return [];
+  const col = c.gap<=0?'#ff2233':(c.gap<20?'#ffaa22':'#33dd66');
+  return [{type:'scatter3d',mode:'lines+markers',x:[c.c1[0],c.c2[0]],y:[c.c1[1],c.c2[1]],z:[c.c1[2],c.c2[2]],
+    line:{color:col,width:6},marker:{size:4,color:col},opacity:0.95,showlegend:false,
+    hoverinfo:'text',text:`closest segs ${c.i}↔${c.j}: gap ${c.gap.toFixed(0)} mm (this pose)`}];
+}
+
+// ── S1 grasp: graspable object-Ø range (Wang climb-to-wrap) ───────────────────────────────────
+// At FULL curl (every joint at its zone Δθ_max, planar), the local centreline radius of curvature R
+// minus the sleeve radius = the object the spiral wraps at that station (touch by segment). Tip curls
+// tightest (Wang r=b·s) → smallest object; the T:W end is loosest → largest. Range over T/W only (the
+// dexterous distal part; Zone B with the fat skin doesn't grasp). OBSERVABLE — reports, constrains nothing.
+function _circumR(a,b,c){
+  const d=(p,q)=>Math.hypot(p[0]-q[0],p[1]-q[1],p[2]-q[2]);
+  const ab=d(a,b), bc=d(b,c), ca=d(c,a);
+  const u=[b[0]-a[0],b[1]-a[1],b[2]-a[2]], v=[c[0]-a[0],c[1]-a[1],c[2]-a[2]];
+  const cx=[u[1]*v[2]-u[2]*v[1], u[2]*v[0]-u[0]*v[2], u[0]*v[1]-u[1]*v[0]];
+  const area2=Math.hypot(cx[0],cx[1],cx[2]);   // = 2·triangle area
+  return area2<1e-9 ? Infinity : (ab*bc*ca)/(2*area2);
+}
+let _graspCache={sig:null,val:null};
+function graspRange(){
+  const sig=JSON.stringify([state.nPerZone,state.taperDeg,state.thetaMax,state.armLength,state.zoneLengths,state.wtIfaceLen]);
+  if(_graspCache.sig===sig) return _graspCache.val;
+  const npz=state.nPerZone, nB=npz[0], nT=npz[1], nW=npz[2];
+  const lengths=boneLengths(npz,state.taperDeg,state.thetaMax,state.armLength,state.zoneLengths);
+  const nj=nB+nT+nW-1, thetas=[], phis=[];
+  for(let i=0;i<nj;i++){ thetas.push(state.thetaMax[zoneOf(i,npz)]); phis.push(0); }   // full planar curl
+  const raw=fk3d(thetas,phis,lengths);
+  let minO=Infinity,maxO=-Infinity,minS=-1,maxS=-1;
+  for(let i=Math.max(1,nB); i<raw.length-1; i++){     // interior points over T/W
+    const R=_circumR(raw[i-1],raw[i],raw[i+1]);
+    if(!isFinite(R)) continue;
+    const obj=2*(R-_segR(i));                          // inscribed object Ø = 2·(curl R − sleeve r)
+    if(obj<=0) continue;
+    if(obj<minO){minO=obj;minS=i;}
+    if(obj>maxO){maxO=obj;maxS=i;}
+  }
+  const val = (minS<0) ? null : {min:minO,max:maxO,minStation:minS,maxStation:maxS};
+  _graspCache={sig,val};
+  return val;
+}
+
+// ── Sweep panel: arm length × spiral tightness, RAW margins (no pass/fail baked in) ───────────
+const SWEEP_METRICS=[
+  {key:'seizeFS', label:'seize FS',   scale:'RdYlGn',  rev:false},
+  {key:'bearSF',  label:'bearing SF', scale:'RdYlGn',  rev:false},
+  {key:'lipSF',   label:'lip SF',     scale:'RdYlGn',  rev:false},
+  {key:'selfgap', label:'self-gap',   scale:'RdYlGn',  rev:false},
+  {key:'deadband',label:'deadband D', scale:'RdYlGn',  rev:true},
+  {key:'graspMin',label:'grasp min Ø',scale:'Viridis', rev:false},
+  {key:'segMin',  label:'seg min',    scale:'RdYlGn',  rev:false},
+];
+let _sweepData=null, _sweepMetric='seizeFS';
+function _fullCurlPts(){
+  const npz=state.nPerZone, nj=npz[0]+npz[1]+npz[2]-1;
+  const lengths=boneLengths(npz,state.taperDeg,state.thetaMax,state.armLength,state.zoneLengths);
+  const thetas=[],phis=[];
+  for(let i=0;i<nj;i++){ thetas.push(state.thetaMax[zoneOf(i,npz)]); phis.push(0); }
+  return {pts:fk3d(thetas,phis,lengths), lengths};
+}
+function runSweep(){
+  const save=JSON.parse(JSON.stringify({nPerZone:state.nPerZone,thetaMax:state.thetaMax,
+    zoneLengths:state.zoneLengths,armLength:state.armLength,taperDeg:state.taperDeg}));
+  const baseZL=state.zoneLengths.slice(), baseSum=baseZL.reduce((a,b)=>a+b,0), baseTheta=state.thetaMax.slice();
+  const NA=8, NT=6;
+  const arms=Array.from({length:NA},(_,k)=>Math.round(2200+(4500-2200)*k/(NA-1)));
+  const tights=Array.from({length:NT},(_,k)=>+(0.7+(1.4-0.7)*k/(NT-1)).toFixed(2));
+  const grid=[];
+  for(let ti=0;ti<NT;ti++){ const row=[];
+    for(let ai=0;ai<NA;ai++){
+      state.armLength=arms[ai];
+      state.zoneLengths=baseZL.map(l=>Math.round(l*arms[ai]/baseSum));
+      state.thetaMax=baseTheta.map(t=>Math.min(45,+(t*tights[ti]).toFixed(1)));
+      const v=EVAL.verdict(liveCandidate());
+      const fc=_fullCurlPts();
+      const coll=selfCollision(fc.pts).gap;
+      const gr=graspRange(), dd=deadbandD(MU_CAP_STORM);
+      const segMin=Math.min.apply(null,fc.lengths);
+      const lipV=v.verdicts.lip;
+      row.push({seizeFS:+v.verdicts.seize.FS, bearSF:+(v.verdicts.bearing.SF||0),
+        lipSF:(lipV.SF_stress!=null?+lipV.SF_stress:(lipV.ok?99:0)),
+        selfgap:Math.round(coll), deadband:Math.round(dd),
+        graspMin:gr?Math.round(gr.min):0, segMin:Math.round(segMin)});
+    }
+    grid.push(row);
+  }
+  Object.assign(state,save);
+  _collCache.sig=null; _graspCache.sig=null; _gravLipCache.sig=null;   // caches were mutated mid-sweep
+  return {arms,tights,grid};
+}
+function renderSweepHeatmap(metric){
+  if(!_sweepData) return;
+  if(metric) _sweepMetric=metric;
+  const m=SWEEP_METRICS.find(x=>x.key===_sweepMetric)||SWEEP_METRICS[0];
+  const z=_sweepData.grid.map(row=>row.map(c=>c[_sweepMetric]));
+  const trace={type:'heatmap', x:_sweepData.arms, y:_sweepData.tights, z, colorscale:m.scale, reversescale:!!m.rev,
+    colorbar:{title:{text:m.label,side:'right',font:{color:'#9bbbdd',size:9}},thickness:10,tickfont:{color:'#9bbbdd',size:8}},
+    hovertemplate:'arm %{x} mm<br>Δθ ×%{y}<br>'+m.label+' %{z}<extra></extra>'};
+  const layout={margin:{l:48,r:10,t:6,b:34}, paper_bgcolor:'#0c0c20', plot_bgcolor:'#0c0c20',
+    font:{color:'#9bbbdd',size:9},
+    xaxis:{title:{text:'arm length (mm)',font:{size:9}},color:'#6688aa'},
+    yaxis:{title:{text:'spiral tightness (Δθ ×)',font:{size:9}},color:'#6688aa'}};
+  Plotly.react('sweep-plot', [trace], layout, {displayModeBar:false});
+  // highlight the active metric button
+  document.querySelectorAll('#sweep-metric-btns .btn').forEach(b=>b.classList.toggle('active',b.dataset.k===_sweepMetric));
+}
+
 // ── Palette system ────────────────────────────────────────────────────────────
 const PALETTES = {
   'dark':     { bg:'#1a1a2e', grid:'#2a2a4a', zero:'#4a4a6a',
@@ -1730,6 +2149,22 @@ function forceField(count,lpj,forceView,baseDemand,gm){
           title:'grav moment<br>0–30 N·m', hover:vals.map(v=>v.toFixed(1)+' N·m')};
 }
 
+// W:T interface marker: a SYMMETRIC stub straddling the T:W boundary pivot — half into Zone T, half
+// into Zone W (a socket facing each side; rigid dovetail at the centre, no articulation).
+function ifaceTraces(pts){
+  const wt=state.wtIfaceLen||0; if(wt<=0) return [];
+  const wIdx=state.nPerZone[0]+state.nPerZone[1];   // T:W boundary pivot = pts[wIdx]
+  if(wIdx<1||wIdx+1>=pts.length) return [];
+  const c=pts[wIdx], pPrev=pts[wIdx-1], pNext=pts[wIdx+1];
+  const dirT=norm([c[0]-pPrev[0],c[1]-pPrev[1],c[2]-pPrev[2]]);   // along last-T bone (into boundary)
+  const dirW=norm([pNext[0]-c[0],pNext[1]-c[1],pNext[2]-c[2]]);   // along first-W bone (out of boundary)
+  const h=wt/2;
+  const a=[c[0]-dirT[0]*h,c[1]-dirT[1]*h,c[2]-dirT[2]*h];   // T-side plate/socket
+  const e=[c[0]+dirW[0]*h,c[1]+dirW[1]*h,c[2]+dirW[2]*h];   // W-side plate/socket
+  return [{type:'scatter3d',mode:'lines',x:[a[0],c[0],e[0]],y:[a[1],c[1],e[1]],z:[a[2],c[2],e[2]],
+    line:{color:'#ff44dd',width:11},opacity:0.95,showlegend:false,
+    hoverinfo:'text',text:`W:T interface — ${wt.toFixed(0)} mm, symmetric (socket both directions; dovetail centre, no articulation)`}];
+}
 function armTraces(pts,nPerZone,opacity,thetas,frictionData,forceView,baseDemand){
   thetas=thetas||[];
   forceView=forceView||'engage';
@@ -2123,9 +2558,12 @@ function render(){
     ...triadTraces(),
     ...poleTraces(),
     ...fairleadTraces(arm1,state.nPerZone,1.0),
+    ...segEnvTraces(arm1),
     ...skinTraces(arm1,1.0),
     ...armTraces(arm1,state.nPerZone,1.0,mf.thetas,fricData,fv,baseDemand),
-    ...(state.overlays.arm2?[...fairleadTraces(arm2,state.nPerZone,1.0),...skinTraces(arm2,1.0),...armTraces(arm2,state.nPerZone,1.0,mf.thetas,fricData,fv,baseDemand)]:[]),
+    ...ifaceTraces(arm1),
+    ...collisionTraces(arm1),
+    ...(state.overlays.arm2?[...fairleadTraces(arm2,state.nPerZone,1.0),...segEnvTraces(arm2),...skinTraces(arm2,1.0),...armTraces(arm2,state.nPerZone,1.0,mf.thetas,fricData,fv,baseDemand),...ifaceTraces(arm2)]:[]),
     ...(state.overlays.lop?ghostTrace(lop1[0],lop1[1]):[]),
     ...(state.overlays.lop&&state.overlays.arm2?ghostTrace(lop2[0],lop2[1]):[]),
   ];
@@ -2290,6 +2728,7 @@ function wireSlider(id,valId,sfx,key){
 wireSlider('mount-angle','mount-angle-val','°','mountAngle');
 wireSlider('mount-h','mount-h-val',' mm','mountH');
 wireSlider('arm-sep','arm-sep-val',' mm','armSep');
+wireSlider('wi-wtiface','wi-wtiface-val',' mm','wtIfaceLen');   // W:T interface axial length (between pivots)
 document.getElementById('skin-base-r').addEventListener('input',function(){
   state.skinBaseR=+this.value;document.getElementById('skin-base-r-val').textContent=Math.round(+this.value)+' mm';
   if(state.strongZones)applyStrongZones();
@@ -2360,9 +2799,26 @@ document.getElementById('ptfe-jacket').addEventListener('click',function(){
   resetPeakForces();
   render();
 });
+document.getElementById('iglide-grade').addEventListener('click',function(){
+  state.iglide = state.iglide==='I180' ? 'J260' : 'I180';   // chosen bearing grade (eval checks AMS-dryable)
+  this.textContent=state.iglide;
+  this.classList.toggle('active',state.iglide==='J260');
+  render();
+});
+document.getElementById('pipe-bonded').addEventListener('click',function(){
+  state.bonded=!state.bonded;   // bonded pipe → lip moment to shear (needs a bonding material)
+  this.textContent='pipe: '+(state.bonded?'BONDED':'slip-fit');
+  this.classList.toggle('active',state.bonded);
+  render();
+});
+document.getElementById('wi-lipwall').addEventListener('input',function(){
+  state.lipWall=+this.value;
+  document.getElementById('wi-lipwall-val').textContent=state.lipWall.toFixed(1)+' mm';
+  render();
+});
 // Collapsible sidebar sections — triangle toggle in each section header.
 (function(){
-  const COLLAPSED=['overlays','mount','what-if geometry'];
+  const COLLAPSED=['overlays','mount','what-if geometry','friction'];
   document.querySelectorAll('.section').forEach(sec=>{
     const title=sec.querySelector('.section-title');
     if(!title) return;
@@ -2438,6 +2894,16 @@ document.getElementById('wang-apply-zw').addEventListener('click',()=>{wangApply
 document.getElementById('wang-apply-zt').addEventListener('click',()=>{wangApplyZone(1,wangState.zt[wangState.selZt]);wangRebuild();});
 document.getElementById('wang-apply-both').addEventListener('click',()=>{wangApplyZone(2,wangState.zw[wangState.selZw]);wangApplyZone(1,wangState.zt[wangState.selZt]);wangRebuild();});
 document.getElementById('wang-btn').addEventListener('click',()=>{wangRebuild();document.getElementById('wang-modal').style.display='block';});
+document.getElementById('sweep-btn').addEventListener('click',()=>{
+  const c=document.getElementById('sweep-metric-btns');
+  if(!c.children.length){ SWEEP_METRICS.forEach(m=>{const b=document.createElement('button');
+    b.className='btn'; b.style.fontSize='9px'; b.textContent=m.label; b.dataset.k=m.key;
+    b.addEventListener('click',()=>renderSweepHeatmap(m.key)); c.appendChild(b); }); }
+  _sweepData=runSweep();
+  document.getElementById('sweep-modal').style.display='block';
+  renderSweepHeatmap(_sweepMetric);
+});
+document.getElementById('sweep-close').addEventListener('click',()=>document.getElementById('sweep-modal').style.display='none');
 // ── Save Geometry ─────────────────────────────────────────────────────────────
 // Filename: YYYYMMDD_MinuteOfDay_ArmLenMM_TotalSegs_NNN.json
 // NNN resets each page load. Data: full what-if state snapshot.
@@ -2477,6 +2943,7 @@ function saveGeometry(){
     thetaMax: state.thetaMax.slice(),
     taperDeg: state.taperDeg.slice(),
     zoneLengths: state.zoneLengths.slice(),
+    wtIfaceLen: state.wtIfaceLen,
     skinBaseR: state.skinBaseR,
     strongZones: state.strongZones,
     zoneDiam: ZONE_DIAM,
@@ -2502,6 +2969,9 @@ function applyLoadedGeo(g){
   if(Array.isArray(g.taperDeg)&&g.taperDeg.length===3) state.taperDeg=g.taperDeg.slice();
   if(Array.isArray(g.zoneLengths)&&g.zoneLengths.length===3) state.zoneLengths=g.zoneLengths.slice();
   if(typeof g.skinBaseR==='number') state.skinBaseR=g.skinBaseR;
+  if(typeof g.wtIfaceLen==='number'){ state.wtIfaceLen=g.wtIfaceLen;
+    const we=document.getElementById('wi-wtiface');
+    if(we){we.value=state.wtIfaceLen;document.getElementById('wi-wtiface-val').textContent=Math.round(state.wtIfaceLen)+' mm';} }
   // clamp segs to current slider ranges so a stale file can't push a slider out of bounds
   ['wi-nb','wi-nt','wi-nw'].forEach((id,i)=>{const el=document.getElementById(id);
     if(el){const lo=+el.min,hi=+el.max;state.nPerZone[i]=Math.min(hi,Math.max(lo,state.nPerZone[i]));}});
